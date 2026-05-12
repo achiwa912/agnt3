@@ -1,0 +1,285 @@
+#+TITLE: agnt3
+
+#+begin_src 
+# Project: agnt3 (Sandbox Compliance Officer)
+
+## Core Objective
+A type-safe, protocol-oriented AI agent system for HR/Compliance automation.
+Features a Human-in-the-loop (HITL) gate to prevent autonomous execution
+of high-stakes actions without manual dashboard approval.
+Tech Stack (2026 Standards)
+
+Brain: PydanticAI (Agent Framework) + Ollama (qwen3:8b reasoning model)
+Protocol: Model Context Protocol (MCP) Python SDK (Decoupled tool layer)
+Data: SQLite + SQLAlchemy (Async) for Audit Logs (HOTL) and HITL states
+Frontend: Vue 3 (Vite 7) + DaisyUI/Tailwind (Dashboard & Monitoring)
+Infrastructure: N150 Ubuntu Server (Lab) + M1 Pro Mac (Dev)
+
+## Architectural Workflow
+Request: Mock HR request (e.g., PTO/Expense) is ingested.
+Reason: Agent uses MCP tool to read local policy docs (.org/.md).
+Gating: If violation detected, Agent writes "PENDING" to SQLite.
+HITL: Vue 3 UI detects pending state; User clicks Approve/Deny.
+Audit: All steps are recorded in a DaisyUI Timeline for HOTL review.
+
+## Implementation Roadmap
+Ph 1: Build MCP Server for local policy I/O and system metrics.
+Ph 2: Configure PydanticAI Agent with tool-calling via Ollama.
+Ph 3: Develop SQLite/SQLAlchemy layer for async state persistence.
+Ph 4: Construct Vue 3 Dashboard with DaisyUI 'stats' and 'timeline'.
+
+## Project State
+Problem 1 complete: scaffold created, pyproject.toml configured
+Dependencies: pydantic-ai-slim[mcp], mcp, sqlalchemy[asyncio], aiosqlite, ollama
+Directory layout: mcp/, agent/, db/, fe/, policy/, main.py, agnt3.org
+MCP transport decision: streamable-http (not SSE; SSE is being deprecated)
+Next: Problem 2 — implement mcp/server.py with read_policy tool
+
+## Learning Approach
+Problem-by-problem (same pedagogy as ragev frontend project)
+Don't give complete code first — guide toward the solution
+Concise answers with links to official docs where relevant
+Prefer complete files over diffs when code is eventually provided
+No asterisk-based bullet/header formatting (org-mode compatibility)
+#+end_src
+
+#+begin_src 
+# Project: agnt3 (Sandbox Compliance Officer)
+
+## Core Objective
+A type-safe, protocol-oriented AI agent system for HR/Compliance automation. 
+Features a Human-in-the-loop (HITL) gate to prevent autonomous execution 
+of high-stakes actions without manual dashboard approval.
+
+## Tech Stack (2026 Standards)
+- Brain: PydanticAI (Agent Framework) + Ollama (qwen3:8b? reasoning model)
+- Protocol: Model Context Protocol (MCP) Python SDK (Decoupled tool layer)
+- Data: SQLite + SQLAlchemy (Async) for Audit Logs (HOTL) and HITL states
+- Frontend: Vue 3 (Vite 7) + DaisyUI/Tailwind (Dashboard & Monitoring)
+- Infrastructure: N150 Ubuntu Server (Lab) + M1 Pro Mac (Dev)
+
+## Architectural Workflow
+1. Request: Mock HR request (e.g., PTO/Expense) is ingested.
+2. Reason: Agent uses MCP tool to read local policy docs (.org/.md).
+3. Gating: If violation detected, Agent writes "PENDING" to SQLite.
+4. HITL: Vue 3 UI detects pending state; User clicks Approve/Deny.
+5. Audit: All steps are recorded in a DaisyUI Timeline for HOTL review.
+
+## Implementation Roadmap
+- Ph 1: Build MCP Server for local policy I/O and system metrics.
+- Ph 2: Configure PydanticAI Agent with tool-calling via Ollama.
+- Ph 3: Develop SQLite/SQLAlchemy layer for async state persistence.
+- Ph 4: Construct Vue 3 Dashboard with DaisyUI 'stats' and 'timeline'.
+
+## Context:
+- I've recently finished a portofilio project: https://github.com/achiwa912/ragev/blob/main/README.org (ask me if you want to me to paste)
+- I want to learn agent (PydanticAI) and MCP
+- I want this project to be resume ready (want to link from linkedin profile)
+- I'm still relatively new to Vue (and even JS)
+- Don't give me complete code first.  It's for my learning.
+- Let's do problem-by-problem approach
+#+end_src
+
+** Tech stack
+- Local LLM (ollama and qwen3:4b?)
+  - Embedding: qwen3-embedding:0.6b
+  - Must be free of charge (or very cheap)
+- PydanticAI agent
+- Custom MCP server in Python
+- Frontend dashboard (Vue 3, DaisyUI/TaiwindCSS, Pinia)
+  - approve/deny for Human-in-the-loop (HITL)
+  - monitoring (visualize)
+    - not with Prometheus or other framework (I want to learn Vue)
+  - audit logs (human-on-the-loop; HOTL)
+    - sqlalchemy + sqlite
+
+** The problem to address
+The "Sandbox Compliance Officer"
+- Data source: A set of synthetic HR policies you write (e.g., "PTO requests over 5 days need manager approval").
+- Agent job: Simulate employees making requests. Agent applies policy, pauses when ambiguous or over limit. You approve/deny.
+- Why safe: Entirely simulated. No real people, no real data. But the logic is identical to real compliance systems.
+- Dashboard shows: Pending requests, policy matches, full audit log with mock employee IDs.- Any ideas for issues that the agent addresses?
+
+** Dev roadmap
+- Phase 1: Build a Python MCP server using mcp SDK to expose local files (policies) and system metrics (uptime).
+- Phase 2: Orchestrate PydanticAI with Ollama to reason over policies and generate structured "approval requests."
+- Phase 3: Implement an async SQLite/SQLAlchemy layer to persist transaction states and a "Human-in-the-loop" gate.
+- Phase 4: Develop a Vue 3/DaisyUI dashboard for real-time monitoring and one-click action approval/denial.
+
+*** Prob 1: project scaffold and environment
+#+begin_src 
+agnt3/
+├── mcp_server/          # Phase 1 - MCP tool server
+│   └── server.py
+├── agent/               # Phase 2 - PydanticAI agent
+│   └── agent.py
+├── db/                  # Phase 3 - SQLAlchemy models + session
+│   ├── models.py
+│   └── session.py
+├── frontend/            # Phase 4 - Vue 3 + Vite 7
+├── policy_docs/         # Sample .org/.md policy files for the agent to read
+├── pyproject.toml
+└── README.org
+#+end_src
+
+#+begin_src 
+brew install uv
+uv init agnt3
+cd agnt3
+uv venv
+source .venv/bin/activate
+#+end_src
+
+#+begin_src 
+uv add pydantic-ai 'pydantic-ai-slim[mcp]'
+uv add mcp
+uv add 'sqlalchemy[asyncio]' aiosqlite
+uv add ollama
+#+end_src
+- pto_policy.md (by Gemini)
+#+begin_src 
+# Corporate PTO & Leave Policy (v2026.1)
+
+**Internal Reference:** HR-COMP-2026
+**Status:** Active
+**Last Updated:** 2026-05-08
+
+---
+
+## 1. Introduction
+This document outlines the mandatory Paid Time Off (PTO) and leave policies for all employees. To ensure regulatory compliance and operational continuity, all requests are processed via the **agnt3** autonomous system. 
+
+**Note on HITL:** High-stakes actions (denials or policy overrides) require Human-in-the-loop (HITL) dashboard approval.
+
+---
+
+## 2. Core Policies
+
+### POL-001: Standard Accrual Rate
+- Employees accrue **1.67 days** of PTO per month.
+- Maximum carry-over balance is **10 days** per calendar year. Any excess is forfeited on January 1st.
+
+### POL-002: Blackout Periods
+- No PTO may be taken during the **Q4 audit window** (December 1st – December 31st).
+- Exceptions require VP-level bypass and manual HITL override.
+
+### POL-003: "Mental Health Day" Spontaneity
+- Employees are entitled to **2 "Spontaneous Wellness" days** per year.
+- Notification must be sent via the agent at least **2 hours** before shift start.
+
+### POL-004: Consecutive Day Limit
+- Any single PTO request exceeding **10 consecutive business days** triggers a mandatory "Conflict of Interest" review and "PENDING" state.
+
+### POL-005: Sick Leave Validation
+- Sick leave exceeding **3 consecutive days** requires an official medical certificate.
+- The agent will prompt for a file upload to the SQLite audit log.
+
+### POL-006: Bereavement Protocol
+- **5 days** of paid leave for immediate family.
+- **1 day** for non-immediate family or close relations.
+
+### POL-007: Work-from-Anywhere (WFA) "Work-ation"
+- Employees may work remotely from a different country for up to **14 days** annually.
+- Must maintain a minimum **4-hour overlap** with the Boston (EST) timezone.
+
+### POL-008: Jury Duty & Civic Obligations
+- Paid leave is granted for the duration of the service.
+- Employees must return to work if released from duty for more than **4 hours** of their scheduled shift.
+
+### POL-009: Paternity/Maternity Top-up
+- 100% salary coverage for the first **12 weeks** of parental leave, inclusive of state benefits.
+
+### POL-010: Emergency Sabbatical
+- Unpaid leave of up to **3 months** for employees with **5+ years** of tenure.
+- Requires a "Re-entry Plan" submitted 30 days prior to departure.
+
+---
+
+## 3. Compliance & Audit Trail (HOTL)
+Every interaction with these policies by the AI Agent is logged with:
+- **Timestamp:** UTC
+- **Policy ID:** (e.g., POL-002)
+- **Agent Reasoning:** Step-by-step logic provided by `qwen3:4b`
+- **HITL Status:** (APPROVED | DENIED | PENDING)
+#+end_src
+
+*** Prob 2: MCP Server with read-policy tool
+
+- https://github.com/modelcontextprotocol/python-sdk?tab=readme-ov-file
+#+begin_src 
+uv add "mcp[cli]"
+#+end_src
+
+**** Learned
+- pathlib '/' operator; very convenient and intuitive
+- pathlib Path.read_text() method instead of f.read()
+- LLM can parse and understand a policy file which has many policies
+
+*** Prob 3: PydanticAI agent with MCP tool-calling via Ollama
+
+- System prompt from comp. officer to LLM
+#+begin_src 
+You are a compliance officer.  When given an HR request, read the relevant policy using your tools and determine if the request complies or vaiolates policy.  Be concise and cite the specific policy rule.
+#+end_src
+
+- https://pydantic.dev/docs/ai/mcp/client/
+#+begin_src 
+uv add "pydantic-ai-slim[mcp]"
+uv add "pydantic-ai-slim[openai]"
+uv add "pydantic-ai-slim[google]"
+#+end_src
+
+- agent/agent.py
+#+begin_src 
+ollama run qwen3:8b
+#+end_src
+
+- gemini-2.5-flash vs qwen3:8b
+#+begin_src 
+(agnt3) ~/py/agnt3 % time uv run python agent/agent.py
+You have 14 unused PTO days. According to **POL-001: Standard Accrual Rate**, the maximum carry-over balance is 10 days per calendar year, and any excess is forfeited on January 1st. Therefore, you should use 4 more PTO days by December 31st to avoid losing them.
+uv run python agent/agent.py  1.88s user 0.46s system 34% cpu 6.738 total
+(agnt3) ~/py/agnt3 % 
+(agnt3) ~/py/agnt3 % 
+(agnt3) ~/py/agnt3 % time uv run python agent/agent.py
+To retain unused PTO days, you must adhere to **POL-001** (Standard Accrual Rate), which limits carry-over to **10 days** per calendar year. Since you have 14 days, you must use **4 days** before the forfeiture deadline of **January 1st**. 
+
+However, **POL-002** (Blackout Periods) prohibits PTO use during **December 1st – December 31st**. Therefore, you must use the 4 days **by November 30th** to avoid losing them. 
+
+**Answer:** Use 4 days by November 30th to retain 10 days.
+uv run python agent/agent.py  1.80s user 0.62s system 5% cpu 44.632 total
+(agnt3) ~/py/agnt3 % 
+#+end_src
+
+- upgraded ollama from 20.0 to 2
+
+*** Prob 4: SQLite/SQLAlchemy async layer for audit logs and HITL state.
+This is the persistence backbone. Every agent action gets recorded, and policy violations write a PENDING record that the Vue dashboard will later pick up.
+Before you write anything — what two tables do you think you need, and what columns would each have?
+
+Maybe I also need employee table.  I will use ORM.
+- requests - request table for managing requests and their status
+  - request id, request, status, request time, decision, decision details, decision by, decision time
+  - status - enum: registered, processing, pending, decided
+  - decision - enum: approved, denied
+  - decision by - employee ID or LLM
+- employees - employee table
+  - employee id, name, role
+  - role - enum: employee, manager, director, vp
+  - auditor flag - Boolean
+- records - log record table for auditing/HOTL
+  - log id, request id, action, who, time
+  - action - enum: registered, approved, denied, pending
+
+- https://docs.sqlalchemy.org/en/20/orm/declarative_tables.html#declarative-with-mapped-column
+Now sketch db/models.py — define the three SQLAlchemy ORM models with DeclarativeBase, using Mapped and mapped_column (the modern SQLAlchemy 2.0 style). Don't worry about the async engine setup yet, that's next.
+
+#+begin_src 
+uv add "sqlalchemy[asyncio]"
+#+end_src
+
+- create tables
+#+begin_src 
+uv run python db/database.py
+#+end_src
+

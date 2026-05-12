@@ -1,0 +1,12 @@
+[project]
+name = "agnt3"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.14"
+dependencies = [
+    "aiosqlite>=0.22.1",
+    "mcp[cli]>=1.27.1",
+    "ollama>=0.6.2",
+    "pydantic-ai-slim[google,mcp,openai]>=1.92.0",
+    "sqlalchemy[asyncio]>=2.0.49",
+]
