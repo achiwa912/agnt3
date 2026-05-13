@@ -283,3 +283,10 @@ uv add "sqlalchemy[asyncio]"
 uv run python db/database.py
 #+end_src
 
+*** Prob 5: connecting the agent to the db
+- create db/seed.py and populate some users (and commit)
+
+- add retry logic to Gemini
+#+begin_src 
+uv add tenacity
+#+end_src

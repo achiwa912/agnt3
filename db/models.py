@@ -1,11 +1,10 @@
 from datetime import datetime
-from enum import Enum
 from typing import Optional
-from sqlalchemy import Integer, String, ForeignKey, DateTime, func, Enum as SAEnum
+from sqlalchemy import Integer, String, ForeignKey, DateTime, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
-class Role(str, Enum):
+class Role:
     EMPLOYEE = "employee"
     MANAGER = "manager"
     DIRECTOR = "director"
@@ -14,20 +13,20 @@ class Role(str, Enum):
     HR = "hr"
 
 
-class Status(str, Enum):
+class Status:
     CREATED = "created"
     PROCESSING = "processing"
     PENDING = "pending"
     DECIDED = "decided"
 
 
-class Decision(str, Enum):
+class Decision:
     UNDECIDED = "undecided"
     APPROVED = "approved"
     DENIED = "denied"
 
 
-class Action(str, Enum):
+class Action:
     CREATED = "created"
     LLM_APPROVED = "llm_approved"
     LLM_REJECTED = "llm_rejected"
@@ -49,7 +48,9 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(50), nullable=False)
     fullname: Mapped[str] = mapped_column(String(100), nullable=True)
-    role: Mapped[Role] = mapped_column(SAEnum(Role))
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    pto_assigned: Mapped[float] = mapped_column(default=0.0)
+    pto_consumed: Mapped[float] = mapped_column(default=0.0)
     requests: Mapped[list["Request"]] = relationship(
         back_populates="requested_by", foreign_keys="Request.requester_id"
     )
@@ -63,15 +64,15 @@ class Request(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     request: Mapped[str] = mapped_column(String, nullable=False)
-    reason: Mapped[str] = mapped_column(String)
-    status: Mapped["Status"] = mapped_column(SAEnum(Status), default=Status.CREATED)
-    decision: Mapped["Decision"] = mapped_column(
-        SAEnum(Decision), default=Decision.UNDECIDED
-    )
+    reason: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default=Status.CREATED)
+    decision: Mapped[str] = mapped_column(String(20), default=Decision.UNDECIDED)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    decided_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     requester_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     decider_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id"), nullable=True
@@ -88,11 +89,12 @@ class Record(Base):
     __tablename__ = "records"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    action: Mapped["Action"] = mapped_column(SAEnum(Action))
+    action: Mapped[str] = mapped_column(String(20), nullable=False)
     action_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    request: Mapped[str] = mapped_column(String)
-    reason: Mapped[str] = mapped_column(String)
+    request: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    reason: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    attach_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     request_id: Mapped[int] = mapped_column(ForeignKey("requests.id"))
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
