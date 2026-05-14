@@ -1,3 +1,4 @@
+from typing import Literal
 import asyncio
 from tenacity import (
     retry,
@@ -5,16 +6,41 @@ from tenacity import (
     stop_after_attempt,
     retry_if_exception_type,
 )
+from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.mcp import MCPServerStreamableHTTP
 from pydantic_ai.models.ollama import OllamaModel
 from pydantic_ai.providers.ollama import OllamaProvider
 from pydantic_ai.exceptions import ModelHTTPError
 from db.database import session
-from db.crud import get_user_id, create_request
+from db.crud import get_user, create_request, update_request_status
+from db.models import Role, Status, Action, Decision
+
+
+class PolicyDecision(BaseModel):
+    policy_ids: list[str]
+    llm_decision: Literal["approved", "denied", "deferred_to_manager", "deferred_to_vp"]
+    reason: str
+
 
 server = MCPServerStreamableHTTP("http://localhost:8000/mcp")
-system_prompt = """You are a compliance officer.  When given an HR request, read the relevant policy using your tools (read 'pto_policy.md') and determine if the request complies or violates policy.  Be concise and cite the specific policy rule."""
+system_prompt = """
+You are a corporate compliance officer operating within the agnt3 automated system. 
+Your job is to read HR requests, cross-reference them against the rules in 'pto_policy.md', and catch violations.
+
+CRITICAL LOGIC PROCESS:
+For every request, you must execute your reasoning in this exact order:
+
+1. RULE BALANCING: Identify ALL policy IDs triggered or violated by the request.
+2. EXCEPTION CHECK: For every triggered policy ID, read the text carefully to check if it contains phrases like "VP approval required", "Exceptions are", "review required", or "discretionary". 
+   - If ANY triggered policy contains an exceptional or VP approval path, the request CANNOT be flatly denied by you. It MUST be deferred.
+3. DECISION CRITERIA:
+   - "denied": Only if there is a clear-cut violation AND the policy text provides NO exceptional path or VP override.
+   - "approved": Only if there are zero violations AND requested_days + pto_consumed <= 2/3 * pto_assigned.
+   - "defer_to_*": For all other situations. If a policy requires a VP review/approval, set "defer_to_vp". If it requires a standard review, set "defer_to_manager".
+
+Output your final judgment using the requested JSON schema. Be concise and cite specific rule text in your "reason".
+"""
 # model_name = "qwen3:8b"
 # model = OllamaModel(
 #     model_name, provider=OllamaProvider(base_url="http://localhost:11434/v1")
@@ -22,7 +48,13 @@ system_prompt = """You are a compliance officer.  When given an HR request, read
 model_name = "google-gla:gemini-2.5-flash-lite"
 model = model_name
 print(model_name)
-agent = Agent(model, toolsets=[server], system_prompt=system_prompt)
+agent = Agent(
+    model,
+    toolsets=[server],
+    system_prompt=system_prompt,
+    output_type=PolicyDecision,
+    model_settings={"temperature": 0},
+)
 
 
 @retry(
@@ -37,14 +69,55 @@ async def run_agent(request: str):
 async def main():
     async with session() as s:
         async with s.begin():
-            user_id = await get_user_id(s=s, username="jsmith")
-            request = f"My user_id={user_id}.  I'd like to travel to Japan from 8/1 to 8/31, and during the period, I'd like to take 11 PTO days.  Pleae approve."
+            user = await get_user(s=s, username="llm")
+            llm_id = user.id
+            user = await get_user(s=s, username="jsmith")
+            request = (
+                f"My user_id={user.id}.  I am assigned {user.pto_assigned} PTO days and have taken {user.pto_consumed} days.  "
+                + "I'd like to travel to Japan from 8/1 to 8/31, and during the period, I'd like to take 11 PTO days.  Please approve."
+            )
             async with server:
                 result = await run_agent(request)
-            print(result.output)
-            await create_request(
-                s=s, user_id=user_id, request_text=request, attach_path=None
+            req = await create_request(
+                s=s, user_id=user.id, request_text=request, attach_path=None
             )
+            print(result.output)
+
+            if result.output.llm_decision in [
+                Action.DEFERRED_TO_MANAGER,
+                Action.DEFERRED_TO_VP,
+            ]:
+                # Deferred
+                await update_request_status(
+                    s,
+                    req.id,
+                    reason=result.output.reason,
+                    status=(
+                        Status.PENDING_MANAGER
+                        if (result.output.llm_decision == Action.DEFERRED_TO_MANAGER)
+                        else Status.PENDING_VP
+                    ),
+                    action=result.output.llm_decision,
+                    action_by=llm_id,
+                    policy_ids=result.output.policy_ids,
+                )
+            else:
+                final_decision = (
+                    Decision.APPROVED
+                    if result.output.llm_decision == Action.APPROVED
+                    else Decision.DENIED
+                )
+                await update_request_status(
+                    s,
+                    req.id,
+                    reason=result.output.reason,
+                    status=Status.DECIDED,
+                    action=result.output.llm_decision,
+                    action_by=llm_id,
+                    decision=final_decision,
+                    decider_id=llm_id,
+                    policy_ids=result.output.policy_ids,
+                )
 
 
 if __name__ == "__main__":

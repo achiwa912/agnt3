@@ -290,3 +290,98 @@ uv run python db/database.py
 #+begin_src 
 uv add tenacity
 #+end_src
+
+Learned:
+- SQLAlchemy flush() to get the inserted id before commit
+- Optional columns must be explicitly nullable=True in the schema
+- Tenacity for retry logic on transient API errors
+- Clean separation: crud.py handles DB, agent.py handles orchestration
+
+*** Prob 6: the HITL gate
+1. Parse the agent output to detect a violation
+2. If violation detected → update request.status to pending
+3. Write a Record with action=Action.LLM_DEFERRED
+
+- https://pydantic.dev/docs/ai/core-concepts/output/
+- output_type
+
+#+begin_src 
+Project: agnt3 (Sandbox Compliance Officer)
+AI agent system for HR/Compliance automation with Human-in-the-Loop (HITL) gating.
+
+Tech Stack
+- Agent: PydanticAI + Gemini (gemini-2.5-flash-lite) / Ollama (qwen3:8b) switchable
+- Tools: MCP Python SDK, streamable-http transport, port 8000
+- DB: SQLite + SQLAlchemy async (aiosqlite), file at db/db.db
+- Frontend: Vue 3 + Vite 7 + DaisyUI/Tailwind (not started yet)
+
+Directory layout
+- mcp/server.py — FastMCP server, read_policy tool, policy/ dir
+- agent/agent.py — PydanticAI agent, structured output, tenacity retry
+- db/models.py — SQLAlchemy ORM: User, Request, Record + constants
+- db/database.py — async engine, async_sessionmaker, init_db()
+- db/seed.py — seeds jsmith (employee, 20 PTO assigned, 6 consumed) and flake (manager)
+- db/crud.py — create_request, create_record, update_request_status, get_user_id
+- policy/pto_policy.md — 10 policies POL-001 through POL-010
+
+Current problem: Problem 6 (HITL gate)
+- Structured output model ComplianceResult with fields: violation: bool, policy_ids: list[str], reason: str
+- Agent returns this via output_type=ComplianceResult
+- If violation=True → update request status to pending, write Record with action=LLM_DEFERRED
+- If violation=False → update request status to decided, decision=approved, write Record with action=LLM_APPROVED
+- update_request_status() in crud.py is partially written but needs cleanup
+
+Key design decisions
+- LLM approves or defers only — humans deny from dashboard
+- All crud functions assume an already-begun session (no internal session management)
+- Constants as plain classes (not Python Enum) — stored as lowercase strings
+- policy_ids stored as JSON column on Request
+- Record table has: action, action_at, request, decision, reason, attach_path, request_id, user_id
+
+Learning approach
+- One problem at a time, Socratic style
+- Concise answers, official doc links
+- No unsolicited hints
+- Prefer complete files over diffs when code is shown
+- No asterisk-based formatting (org-mode compatibility)
+#+end_src
+
+**** simplified for PoC
+- no director layer (employee-manager-vp and hr)
+- manager sees all employee requests
+- no calendar implementation
+- no sick days, parental leave, etc. tracking
+- no work hour tracking
+
+**** agent rules/process
+- Define "safe request"
+  - PTO request for within 2/3 of assigned PTO days
+  - No violation of PTO policy
+- agent will:
+  - approve safe requests
+  - deny requests with PTO policy violation
+  - defer other requests to HITL
+
+**** human approval process
+- employee/manager can't approve their own requests
+- manager 
+  - can overwrite agent/manager decisions
+  - sees employee/manager requests
+- requests that required vp approval go through:
+  - manager approval > vp approval
+- vp/hr can see/overwrite all requests including theirs
+
+**** audit process
+- auditor 
+  - can see all requests and logs
+  - can flag request/log as violation
+
+**** To utilize cheap LLM models (summarized by Gemini)
+- Logic Inversion: The model correctly identifies a policy violation but ignores the "exception" clause (e.g., VP approval) because it is biased toward a binary "Violation = Denied" outcome.
+- Factual Fabrication (Confabulation): The model invents data to support its decision. In your case, it claimed August was in the "Q4 Blackout Period" to justify a denial.
+- Schema Drift: Without strict constraints like Literal, the model "improvises" status names (e.g., defer_to_vp vs. deferred_to_vp), causing failures in the downstream code that expects exact string matches.
+- Retrospective Justification: The model decides on an outcome first (Deny) and then "searches" the policy text to find any reason—real or imagined—to explain that choice in the reason field.
+- Instruction Overlook: Smaller models often lose the "middle" of a long system prompt, prioritizing the first instruction (Read policy) and the last instruction (Output JSON) while skipping complex conditional logic in between.
+
+*** Ph.4; Prob 7 - request list API + Vue frontend
+- https://fastapi.tiangolo.com/tutorial/first-steps/

@@ -5,6 +5,13 @@ from db.database import session
 
 initial_users = [
     User(
+        name="llm",
+        fullname="LLM",
+        role=Role.LLM,
+        pto_assigned=20.0,
+        pto_consumed=0.0,
+    ),
+    User(
         name="jsmith",
         fullname="John Smith",
         role=Role.EMPLOYEE,

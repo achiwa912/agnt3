@@ -1,8 +1,8 @@
-# Corporate PTO & Leave Policy (v2026.1)
+# Corporate PTO & Leave Policy (v2026.2)
 
 **Internal Reference:** HR-COMP-2026
 **Status:** Active
-**Last Updated:** 2026-05-08
+**Last Updated:** 2026-05-14
 
 ---
 
@@ -21,18 +21,18 @@ This document outlines the mandatory Paid Time Off (PTO) and leave policies for 
 
 ### POL-002: Blackout Periods
 - No PTO may be taken during the **Q4 audit window** (December 1st – December 31st).
-- Exceptions require VP-level bypass and manual HITL override.
+- Exceptions are VP approval required
 
 ### POL-003: "Mental Health Day" Spontaneity
 - Employees are entitled to **2 "Spontaneous Wellness" days** per year.
 - Notification must be sent via the agent at least **2 hours** before shift start.
 
 ### POL-004: Consecutive Day Limit
-- Any single PTO request exceeding **10 consecutive business days** triggers a mandatory "Conflict of Interest" review and "PENDING" state.
+- Any single PTO request exceeding **10 consecutive business days** triggers a mandatory "Conflict of Interest" review and VP approval required.
 
 ### POL-005: Sick Leave Validation
 - Sick leave exceeding **3 consecutive days** requires an official medical certificate.
-- The agent will prompt for a file upload to the SQLite audit log.
+- The agent will prompt for a file upload to the audit log.
 
 ### POL-006: Bereavement Protocol
 - **5 days** of paid leave for immediate family.
@@ -59,5 +59,5 @@ This document outlines the mandatory Paid Time Off (PTO) and leave policies for 
 Every interaction with these policies by the AI Agent is logged with:
 - **Timestamp:** UTC
 - **Policy ID:** (e.g., POL-002)
-- **Agent Reasoning:** Step-by-step logic provided by `qwen3:4b`
+- **Agent Reasoning:** Step-by-step logic provided by LLM model
 - **HITL Status:** (APPROVED | DENIED | PENDING)

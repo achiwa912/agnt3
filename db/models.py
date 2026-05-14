@@ -1,22 +1,23 @@
 from datetime import datetime
-from typing import Optional
-from sqlalchemy import Integer, String, ForeignKey, DateTime, func
+from typing import Optional, List
+from sqlalchemy import Integer, String, ForeignKey, DateTime, func, JSON
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Role:
     EMPLOYEE = "employee"
     MANAGER = "manager"
-    DIRECTOR = "director"
     VP = "vp"
     AUDITOR = "auditor"
     HR = "hr"
+    LLM = "llm"
 
 
 class Status:
     CREATED = "created"
     PROCESSING = "processing"
-    PENDING = "pending"
+    PENDING_MANAGER = "pending_manager"
+    PENDING_VP = "pending_vp"
     DECIDED = "decided"
 
 
@@ -28,11 +29,10 @@ class Decision:
 
 class Action:
     CREATED = "created"
-    LLM_APPROVED = "llm_approved"
-    LLM_REJECTED = "llm_rejected"
-    LLM_DEFERRED = "llm_deferred"
     APPROVED = "approved"
-    REJECTED = "rejected"
+    DENIED = "denied"
+    DEFERRED_TO_MANAGER = "deferred_to_manager"
+    DEFERRED_TO_VP = "deferred_to_vp"
     AUDIT_FLAGGED = "audit_flagged"
     AUDIT_OK = "audit_ok"
     AUDIT_NG = "audit_ng"
@@ -66,12 +66,19 @@ class Request(Base):
     request: Mapped[str] = mapped_column(String, nullable=False)
     reason: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default=Status.CREATED)
-    decision: Mapped[str] = mapped_column(String(20), default=Decision.UNDECIDED)
+    decision: Mapped[Optional[str]] = mapped_column(
+        String(20), default=Decision.UNDECIDED
+    )
+    # poilcy_ids can be [] -> nullable=False
+    policy_ids: Mapped[List[str]] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     decided_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    required_approval_role: Mapped[Optional[str]] = mapped_column(
+        String, default=Role.MANAGER
     )
     requester_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     decider_id: Mapped[Optional[int]] = mapped_column(
@@ -94,7 +101,9 @@ class Record(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     request: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    decision: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     reason: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    status: Mapped[str] = mapped_column(String, nullable=False)
     attach_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     request_id: Mapped[int] = mapped_column(ForeignKey("requests.id"))
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
