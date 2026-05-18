@@ -77,9 +77,6 @@ class Request(Base):
     decided_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    required_approval_role: Mapped[Optional[str]] = mapped_column(
-        String, default=Role.MANAGER
-    )
     requester_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     decider_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id"), nullable=True

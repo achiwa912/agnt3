@@ -1,0 +1,7 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+    themes: emerald, light, dark;
+}
+:root {
+    @insert "daisyui/themes/emerald";
+}

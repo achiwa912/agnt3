@@ -385,3 +385,176 @@ Learning approach
 
 *** Ph.4; Prob 7 - request list API + Vue frontend
 - https://fastapi.tiangolo.com/tutorial/first-steps/
+
+#+begin_src 
+uv add fastapi 
+uv add uvicorn # already I have this?
+
+uvicorn api.main:app --reload --port 8001
+#+end_src
+
+#+begin_src 
+~/py/agnt3 % curl http://localhost:8001/requests/2
+[{"id":1,"request":"My user_id=2.  I am assigned 20.0 PTO days and have taken 6.0 days.  I'd like to travel to Japan from 8/1 to 8/31, and during the period, I'd like to take 11 PTO days.  Please approve.","reason":"The request for 11 PTO days exceeds the 10 consecutive business day limit, triggering POL-004, which requires VP approval.","status":"pending_vp","decision":"undecided","policy_ids":["POL-004"],"created_at":"2026-05-14T18:02:38","decided_at":null,"requester_id":2,"decider_id":null}]%     
+#+end_src
+
+- scaffolding
+#+begin_src 
+pnpm create vue@latest fe
+cd fe
+pnpm install
+pnpm add -D daisyui@latest
+pnpm add -D @tailwindcss/vite tailwindcss
+#+end_src
+- options to choose
+#+begin_src 
+TypeScript: No
+JSX: No
+Vue Router: Yes (you'll want multiple views)
+Pinia: Yes (state management for user/session)
+Vitest: No
+Playwright: No
+ESLint: Yes
+Prettier: Yes
+#+end_src
+- add to vite.config.js
+#+begin_src js
+import tailwindcss from '@tailwindcss/vite'
+
+export default defineConfig({
+  plugins: [
+      vue(),
+      tailwindcss(),
+      vueDevTools(),
+  ],
+#+end_src
+- create fe/src/style.css
+#+begin_src js
+@import "tailwindcss";
+@plugin "daisyui" {
+    themes: emerald, light, dark;
+}
+:root {
+    @insert "daisyui/themes/emerald";
+}
+#+end_src
+- add to fe/src/main.js
+#+begin_src js 
+import './style.css'
+#+end_src
+- confirm it works
+#+begin_src 
+pnpm add -g @vue/language-server
+pnpm dev
+#+end_src
+- visit http://localhost:5173
+
+- CORS https://fastapi.tiangolo.com/tutorial/cors/#use-corsmiddleware
+#+begin_src 
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+#+end_src
+
+- apply theme; index.html
+#+begin_src 
+<html lang="en" data-theme="emerald">
+#+end_src
+
+**** How to add a page
+- create src/views/LoginView.vue
+#+begin_src js
+<script setup>
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+function selectUser(user) {
+  <snip>
+  router.push('/requests')
+}
+</script>
+#+end_src
+- add to src/router/index.js
+#+begin_src js
+import { createRouter, createWebHistory } from 'vue-router'
+import LoginView from '../views/LoginView.vue'  // <- add
+
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+    routes: [
+	{ path: '/', redirect: '/login' },
+	{ path: '/requests', component: RequestListView },
+	{ path: '/login', component: LoginView }, // <- add
+    ],
+})
+#+end_src
+- src/App.vue has only this:
+#+begin_src vue
+<template>
+  <RouterView />
+</template>
+#+end_src
+
+**** How to add an endpoint
+- add to api/main.py
+
+#+begin_src 
+Project: agnt3 (Sandbox Compliance Officer)
+AI agent system for HR/Compliance automation with Human-in-the-Loop (HITL) gating.
+
+Tech Stack
+- Agent: PydanticAI + Gemini (gemini-2.5-flash-lite) / Ollama (qwen3:8b) switchable
+- Tools: MCP Python SDK, streamable-http transport, port 8000
+- DB: SQLite + SQLAlchemy async (aiosqlite), file at db/db.db
+- Frontend: Vue 3 + Vite + DaisyUI/Tailwind (emerald theme), port 5173
+- API: FastAPI, port 8001
+
+Directory layout
+- mcp/server.py — FastMCP server, read_policy tool, policy/ dir
+- agent/agent.py — PydanticAI agent, run_agent(), process_request()
+- db/models.py — SQLAlchemy ORM: User, Request, Record + constants (Role, Status, Action, Decision)
+- db/database.py — async engine, async_sessionmaker, init_db()
+- db/seed.py — seeds llm (id=1), jsmith (id=2, employee), flake (id=3, manager)
+- db/crud.py — create_request, create_record, update_request_status, get_user, get_user_by_id, get_users, get_requests
+- policy/pto_policy.md — POL-001 through POL-010
+- api/main.py — FastAPI endpoints: GET /users, GET /users/{user_id}, GET /requests/{user_id}, POST /requests
+- fe/src/main.js — app entry
+- fe/src/style.css — Tailwind + daisyUI config
+- fe/src/App.vue — root, just <RouterView />
+- fe/src/router/index.js — routes + navigation guard with sessionStorage rehydration
+- fe/src/stores/user.js — Pinia store: user, setUser(), loadUser()
+- fe/src/views/LoginView.vue — user dropdown, sets store, redirects to /requests
+- fe/src/views/RequestListView.vue — navbar, request table, new request modal
+
+Key design decisions
+- LLM approves, denies, or defers — humans deny/override from dashboard
+- Constants as plain classes (not Enum) — stored as lowercase strings
+- policy_ids stored as JSON column on Request
+- All crud functions assume an already-begun session
+- sessionStorage persists login across page reloads
+- New request modal closes immediately on submit; list refreshes after agent completes
+- loading ref prevents concurrent submissions
+
+Current status: Problem 7 (Request List + Submit) complete
+Next: manager view (pending requests to decide)
+
+Learning approach
+- One problem at a time, Socratic style
+- Concise answers, official doc links
+- No unsolicited hints
+- No asterisk-based formatting (org-mode compatibility)
+#+end_src
+
+db/models.py
+db/crud.py
+agent/agent.py
+api/main.py
+fe/src/router/index.js
+fe/src/stores/user.js
+fe/src/views/RequestListView.vue

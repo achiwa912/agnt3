@@ -66,6 +66,44 @@ async def run_agent(request: str):
     return await agent.run(request)
 
 
+async def process_request(s, req_id, user_id, result, llm_id):
+    if result.output.llm_decision in [
+        Action.DEFERRED_TO_MANAGER,
+        Action.DEFERRED_TO_VP,
+    ]:
+        # Deferred
+        await update_request_status(
+            s,
+            req_id,
+            reason=result.output.reason,
+            status=(
+                Status.PENDING_MANAGER
+                if (result.output.llm_decision == Action.DEFERRED_TO_MANAGER)
+                else Status.PENDING_VP
+            ),
+            action=result.output.llm_decision,
+            action_by=llm_id,
+            policy_ids=result.output.policy_ids,
+        )
+    else:
+        final_decision = (
+            Decision.APPROVED
+            if result.output.llm_decision == Action.APPROVED
+            else Decision.DENIED
+        )
+        await update_request_status(
+            s,
+            req_id,
+            reason=result.output.reason,
+            status=Status.DECIDED,
+            action=result.output.llm_decision,
+            action_by=llm_id,
+            decision=final_decision,
+            decider_id=llm_id,
+            policy_ids=result.output.policy_ids,
+        )
+
+
 async def main():
     async with session() as s:
         async with s.begin():
@@ -82,42 +120,7 @@ async def main():
                 s=s, user_id=user.id, request_text=request, attach_path=None
             )
             print(result.output)
-
-            if result.output.llm_decision in [
-                Action.DEFERRED_TO_MANAGER,
-                Action.DEFERRED_TO_VP,
-            ]:
-                # Deferred
-                await update_request_status(
-                    s,
-                    req.id,
-                    reason=result.output.reason,
-                    status=(
-                        Status.PENDING_MANAGER
-                        if (result.output.llm_decision == Action.DEFERRED_TO_MANAGER)
-                        else Status.PENDING_VP
-                    ),
-                    action=result.output.llm_decision,
-                    action_by=llm_id,
-                    policy_ids=result.output.policy_ids,
-                )
-            else:
-                final_decision = (
-                    Decision.APPROVED
-                    if result.output.llm_decision == Action.APPROVED
-                    else Decision.DENIED
-                )
-                await update_request_status(
-                    s,
-                    req.id,
-                    reason=result.output.reason,
-                    status=Status.DECIDED,
-                    action=result.output.llm_decision,
-                    action_by=llm_id,
-                    decision=final_decision,
-                    decider_id=llm_id,
-                    policy_ids=result.output.policy_ids,
-                )
+            await process_request(s, req.id, user.id, result, llm_id)
 
 
 if __name__ == "__main__":

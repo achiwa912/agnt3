@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import select
-from db.models import Request, Record, Action, User, Status
+from db.models import Request, Record, Action, User, Status, Role
 from db.database import session
 
 
@@ -91,3 +91,20 @@ async def get_user(s, username: str) -> User:
     result = await s.execute(select(User).where(User.name == username))
     usr = result.scalar_one()
     return usr
+
+
+async def get_user_by_id(s, user_id: int) -> User:
+    result = await s.execute(select(User).where(User.id == user_id))
+    return result.scalar_one()
+
+
+async def get_users(s) -> List[User]:
+    """assuming session: s is already begun"""
+    result = await s.execute(select(User).where(User.role != Role.LLM))
+    return result.scalars().all()
+
+
+async def get_requests(s, user_id: int) -> List[Request]:
+    """assuming session: s is already begun"""
+    result = await s.execute(select(Request).where(Request.requester_id == user_id))
+    return result.scalars().all()
