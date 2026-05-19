@@ -504,6 +504,7 @@ const router = createRouter({
 **** How to add an endpoint
 - add to api/main.py
 
+**** Resume at a new chat
 #+begin_src 
 Project: agnt3 (Sandbox Compliance Officer)
 AI agent system for HR/Compliance automation with Human-in-the-Loop (HITL) gating.
@@ -558,3 +559,14 @@ api/main.py
 fe/src/router/index.js
 fe/src/stores/user.js
 fe/src/views/RequestListView.vue
+
+**** Adding features
+- Added navbar
+- Added stats
+- Added tooltip to show reason for denied/pending requests in the list
+- Creating a request detail page
+  - Added db+fast api backend
+  - linked from a row (might want to change to a view icon)
+  - Creating request detail page
+
+

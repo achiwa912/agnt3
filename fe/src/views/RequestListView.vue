@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 
 const requests = ref([])
@@ -8,6 +8,7 @@ const userStore = useUserStore()
 const modalRef = ref(null)
 const newreq = ref('')
 const loading = ref(false)
+const router = useRouter()
 
 const openModal = () => { modalRef.value?.showModal() }
 const closeModal = () => { modalRef.value?.close() }
@@ -39,7 +40,7 @@ const denied = computed(() => requests.value.filter(r => r.decision === 'denied'
 const waiting = computed(() => requests.value.filter(r => r.status !== 'decided').length)
 
 onMounted(async () => {
-  const res = await fetch(`http://localhost:8001/requests/${userStore.user.id}`)
+  const res = await fetch(`http://localhost:8001/users/${userStore.user.id}/requests`)
   requests.value = await res.json()
 })
 
@@ -184,7 +185,7 @@ onMounted(async () => {
 	</tr>
       </thead>
       <tbody>
-	<tr v-for="req in requests" :key="req.id">
+	<tr v-for="req in requests" :key="req.id" :title="(['pending_manager', 'pending_vp'].includes(req.status)) || (req.decision === 'denied') ? req.reason : ''" @click="router.push(`/requests/${req.id}`)">
 	  <td>{{ req.id }}</td>
 	  <td>{{ req.request }}</td>
 	  <td><span class="badge badge-info">{{ req.status }}</span></td>
@@ -193,5 +194,5 @@ onMounted(async () => {
 	</tr>
       </tbody>
     </table>
-    </div>
+  </div>
 </template>

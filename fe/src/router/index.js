@@ -8,6 +8,9 @@ const router = createRouter({
     routes: [
 	{ path: '/', redirect: '/login' },
 	{ path: '/requests', component: RequestListView },
+	{ path: '/requests/:id',
+	  name: 'request-detail',
+	  component: () => import('../views/RequestDetailView.vue') },
 	{ path: '/login', component: LoginView },
     ],
 })

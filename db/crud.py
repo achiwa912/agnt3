@@ -106,5 +106,21 @@ async def get_users(s) -> List[User]:
 
 async def get_requests(s, user_id: int) -> List[Request]:
     """assuming session: s is already begun"""
-    result = await s.execute(select(Request).where(Request.requester_id == user_id))
+    result = await s.execute(
+        select(Request).where(Request.requester_id == user_id).order_by(Request.id)
+    )
+    return result.scalars().all()
+
+
+async def get_request(s, request_id: int) -> Request:
+    """assuming session: s is already begun"""
+    result = await s.execute(select(Request).where(Request.id == request_id))
+    return result.scalar_one()
+
+
+async def get_records(s, request_id: int) -> List[Record]:
+    """assuming session: s is already begun"""
+    result = await s.execute(
+        select(Record).where(Record.request_id == request_id).order_by(Record.action_at)
+    )
     return result.scalars().all()
