@@ -37,6 +37,7 @@ class RequestSchema(BaseModel):
     decided_at: Optional[datetime]
     requester_id: int
     decider_id: Optional[int]
+    decider: Optional[str] = None
 
 
 @app.get("/users/{user_id}/requests")
@@ -58,6 +59,7 @@ async def list_requests(user_id: int) -> List[RequestSchema]:
             decided_at=r.decided_at,
             requester_id=r.requester_id,
             decider_id=r.decider_id,
+            decider="",
         )
         reqs.append(req)
     return reqs
@@ -95,6 +97,10 @@ async def read_request(request_id: int) -> RequestSchema:
     async with session() as s:
         async with s.begin():
             r = await get_request(s, request_id)
+            decider = ""
+            if r.decider_id:
+                decider = await get_user_by_id_db(s, r.decider_id)
+                decider = decider.fullname
     req = RequestSchema(
         id=r.id,
         request=r.request,
@@ -106,6 +112,7 @@ async def read_request(request_id: int) -> RequestSchema:
         decided_at=r.decided_at,
         requester_id=r.requester_id,
         decider_id=r.decider_id,
+        decider=decider,
     )
     return req
 
@@ -187,6 +194,7 @@ class RecordSchema(BaseModel):
     attach_path: Optional[str]
     request_id: int
     user_id: int
+    user_name: str
 
 
 @app.get("/requests/{request_id}/records")
@@ -194,19 +202,21 @@ async def list_records(request_id: int) -> List[RecordSchema]:
     async with session() as s:
         async with s.begin():
             records = await get_records(s, request_id)
-    rcds = []
-    for r in records:
-        rcd = RecordSchema(
-            id=r.id,
-            action=r.action,
-            action_at=r.action_at,
-            request=r.request,
-            decision=r.decision,
-            reason=r.reason,
-            status=r.status,
-            attach_path=r.attach_path,
-            request_id=r.request_id,
-            user_id=r.user_id,
-        )
-        rcds.append(rcd)
+            rcds = []
+            for r in records:
+                u = await get_user_by_id_db(s, r.user_id)
+                rcd = RecordSchema(
+                    id=r.id,
+                    action=r.action,
+                    action_at=r.action_at,
+                    request=r.request,
+                    decision=r.decision,
+                    reason=r.reason,
+                    status=r.status,
+                    attach_path=r.attach_path,
+                    request_id=r.request_id,
+                    user_id=r.user_id,
+                    user_name=u.fullname,
+                )
+                rcds.append(rcd)
     return rcds

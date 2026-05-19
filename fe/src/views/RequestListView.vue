@@ -47,29 +47,46 @@ onMounted(async () => {
 </script>
 
 <template>
-  <!-- Navbar -->
-  <div class="navbar bg-primary shadow-sm">
-    <div class="flex-1">
-      <a class="btn btn-ghost text-xl">agnt3</a>
+  <nav class="navbar bg-[#f8f9fc] dark:bg-base-100 border-b border-primary/10 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto w-full px-6 py-2">
+      <div class="flex items-center justify-between w-full">
+      
+	<!-- Logo -->
+	<a href="/" class="flex items-center gap-2.5">
+          <span class="text-2xl font-semibold tracking-tighter text-base-content">agnt3</span>
+	</a>
+
+	<!-- Right side -->
+	<div class="flex items-center gap-6">
+        
+          <!-- New Request -->
+          <button 
+            @click="openModal"
+            class="btn btn-primary btn-sm rounded-2xl px-5 py-2.5 text-sm font-medium shadow-sm hover:shadow transition-all active:scale-95">
+            + New Request
+          </button>
+
+          <!-- User Menu -->
+          <div class="dropdown dropdown-end">
+            <label tabindex="0" class="flex items-center gap-3 cursor-pointer py-1">
+              <div>
+		<p class="font-medium text-sm">{{ userStore.user.fullname }}</p>
+              </div>
+            
+              <div class="w-8 h-8 bg-primary/10 text-primary rounded-2xl flex items-center justify-center font-medium border border-primary/20">
+		{{ userStore.user.fullname?.charAt(0) }}
+              </div>
+            </label>
+
+            <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-3xl shadow-lg w-52 p-2 mt-2 border border-base-200">
+              <li><a @click="openModal" class="rounded-2xl py-2.5">+ New Request</a></li>
+              <li><RouterLink to="/login" class="rounded-2xl py-2.5 text-error">Logout</RouterLink></li>
+            </ul>
+          </div>
+	</div>
+      </div>
     </div>
-    <div class="flex-none">
-      <ul class="menu menu-horizontal px-1">
-	<li>
-	  <details>
-	    <summary>{{ userStore.user.fullname }}</summary>
-	    <ul class="bg-base-100 rounded-t-none p-2">
-	      <li @click="openModal"><a class="whitespace-nowrap">New request</a></li>
-	      <li>
-		<RouterLink to="/login" class="whitespace-nowrap">
-		  Logout
-		</RouterLink>
-	      </li>
-	    </ul>
-	  </details>
-	</li>
-      </ul>
-    </div>
-  </div>
+  </nav>
   <dialog ref="modalRef" class="modal">
     <div class="modal-box">
       <p class="py-4">Enter a new request:</p>
@@ -87,7 +104,7 @@ onMounted(async () => {
 
   <!-- stats -->
   <div class="flex justify-center p-6">
-    <div class="stats shadow">
+    <div class="stats border border-base-200 px-6 py-3 rounded-3xl shadow-sm hover:shadow-2xl transition-all duration-300 overflow-hidden">
       <div class="stat">
 	<div class="stat-figure">
 	  <svg
@@ -172,27 +189,63 @@ onMounted(async () => {
   </div>
       
   <!-- Requests table -->
-  <div class="p-6">
-    <h1 class="text-2xl font-bold mb-4">Requests</h1>
-    <table class="table table-zebra w-full">
-      <thead>
-	<tr>
-	  <th>ID</th>
-	  <th>Request</th>
-	  <th>Status</th>
-	  <th>Decision</th>
-	  <th>Created</th>
-	</tr>
-      </thead>
-      <tbody>
-	<tr v-for="req in requests" :key="req.id" :title="(['pending_manager', 'pending_vp'].includes(req.status)) || (req.decision === 'denied') ? req.reason : ''" @click="router.push(`/requests/${req.id}`)">
-	  <td>{{ req.id }}</td>
-	  <td>{{ req.request }}</td>
-	  <td><span class="badge badge-info">{{ req.status }}</span></td>
-	  <td>{{ req.decision }}</td>
-	  <td>{{ req.created_at }}</td>
-	</tr>
-      </tbody>
-    </table>
+  <div class="p-6 max-w-7xl mx-auto">
+    <div class="flex justify-between items-center mb-8">
+      <h1 class="text-3xl font-semibold tracking-tight">Requests</h1>
+      <!-- Optional: Add filter/search here later -->
+    </div>
+
+    <div class="space-y-4">
+      <div 
+	v-for="req in requests" 
+	:key="req.id"
+	@click="router.push(`/requests/${req.id}`)"
+	class="group bg-base-100 hover:bg-base-200 border border-base-200 rounded-3xl px-6 py-5 
+               transition-all duration-300 hover:shadow-xl cursor-pointer flex items-center gap-6"
+	:title="(['pending_manager', 'pending_vp'].includes(req.status)) || (req.decision === 'denied') ? req.reason : ''"
+      >
+      
+	<!-- ID -->
+	<div class="w-20 font-mono text-sm text-base-content/70">
+          #{{ req.id }}
+	</div>
+
+	<!-- Main Content -->
+	<div class="flex-1 min-w-0">
+          <p class="font-medium text-base truncate">{{ req.request }}</p>
+          <p class="text-sm text-base-content/60 mt-1">
+            {{ req.created_at }}
+          </p>
+	</div>
+
+	<!-- Status -->
+	<div>
+          <span 
+            class="badge px-5 py-3 text-sm font-medium"
+            :class="{
+              'badge-info': req.status.includes('pending'),
+              'badge-success': req.decision === 'approved',
+              'badge-error': req.decision === 'denied',
+              'badge-warning': req.status === 'pending_vp'
+            }">
+            {{ req.status }}
+          </span>
+	</div>
+
+	<!-- Decision -->
+	<div class="w-28 text-center">
+          <span 
+            class="inline-block px-4 py-1.5 rounded-2xl text-sm font-medium"
+            :class="{
+              'bg-success/10 text-success': req.decision === 'approved',
+              'bg-error/10 text-error': req.decision === 'denied',
+              'bg-warning/10 text-warning': !req.decision || req.decision === 'pending'
+            }">
+            {{ req.decision || '—' }}
+          </span>
+	</div>
+
+      </div>
+    </div>
   </div>
 </template>

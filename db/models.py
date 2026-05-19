@@ -19,6 +19,7 @@ class Status:
     PENDING_MANAGER = "pending_manager"
     PENDING_VP = "pending_vp"
     DECIDED = "decided"
+    CANCELLED = "cancelled"
 
 
 class Decision:
