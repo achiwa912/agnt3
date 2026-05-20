@@ -11,8 +11,9 @@ from db.crud import (
     get_user,
     get_users,
     create_request,
-    get_user_by_id as get_user_by_id_db,
+    get_user_by_id,
     get_records,
+    update_request,
 )
 from db.database import session
 from agent.agent import run_agent, process_request, server
@@ -85,11 +86,50 @@ async def new_request(body: NewRequestBody):
 
 
 class PatchRequestBody(BaseModel):
-    request: Optional[str]
-    reason: Optional[str]
-    status: Optional[str]
-    decision: Optional[str]
-    decider_id: Optional[int]
+    action: str
+    action_by: str
+    request: Optional[str] = None
+    reason: Optional[str] = None
+    status: Optional[str] = None
+    decision: Optional[str] = None
+    decider_id: Optional[int] = None
+
+
+@app.patch("/requests/{request_id}", response_model=RequestSchema)
+async def patch_request(request_id: int, body: PatchRequestBody):
+    async with session() as s:
+        async with s.begin():
+            r = await get_request(s, request_id)
+            if body.request:
+                r.request = body.request
+            if body.reason:
+                r.reason = body.reason
+            if body.status:
+                r.status = body.status
+            if body.decision:
+                r.decision = body.decision
+                r.decider_id = body.decider_id
+            action_by_user = await get_user(s, body.action_by)
+            await update_request(
+                s,
+                request_id,
+                action=body.action,
+                action_by=action_by_user.id,
+                request=r.request,
+                reason=r.reason,
+                status=r.status,
+                decision=r.decision,
+                policy_ids=r.policy_ids,
+                requester_id=r.requester_id,
+                decider_id=r.decider_id,
+            )
+            if body.action == "resubmitted":
+                r.request = body.request
+                async with server:
+                    result = await run_agent(body.request)
+                    llm = await get_user(s=s, username="llm")
+                    await process_request(s, r.id, r.requester_id, result, llm.id)
+            return r
 
 
 @app.get("/requests/{request_id}")
@@ -99,7 +139,7 @@ async def read_request(request_id: int) -> RequestSchema:
             r = await get_request(s, request_id)
             decider = ""
             if r.decider_id:
-                decider = await get_user_by_id_db(s, r.decider_id)
+                decider = await get_user_by_id(s, r.decider_id)
                 decider = decider.fullname
     req = RequestSchema(
         id=r.id,
@@ -115,29 +155,6 @@ async def read_request(request_id: int) -> RequestSchema:
         decider=decider,
     )
     return req
-
-
-@app.patch("/requests/{request_id}", response_model=RequestSchema)
-async def patch_request(request_id: int, body: PatchRequestBody):
-    async with session() as s:
-        async with s.begin():
-            request = await get_request(s, request_id)
-            if body.reason:
-                request.reason = body.reason
-            if body.status:
-                request.status = body.status
-            if body.decision:
-                request.decision = body.decision
-                request.decider_id = body.decider_id
-            if body.request:
-                request.request = body.request
-                async with server:
-                    result = await run_agent(body.request)
-                    llm = await get_user(s=s, username="llm")
-                    await process_request(
-                        s, request.id, request.requester_id, result, llm.id
-                    )
-            return request
 
 
 class UserSchema(BaseModel):
@@ -169,10 +186,10 @@ async def list_users() -> List[UserSchema]:
 
 
 @app.get("/users/{user_id}", response_model=UserSchema)
-async def get_user_by_id(user_id: int) -> UserSchema:
+async def get_user_by_id_endpoint(user_id: int) -> UserSchema:
     async with session() as s:
         async with s.begin():
-            user = await get_user_by_id_db(s, user_id)
+            user = await get_user_by_id(s, user_id)
     return UserSchema(
         id=user_id,
         name=user.name,
@@ -204,7 +221,7 @@ async def list_records(request_id: int) -> List[RecordSchema]:
             records = await get_records(s, request_id)
             rcds = []
             for r in records:
-                u = await get_user_by_id_db(s, r.user_id)
+                u = await get_user_by_id(s, r.user_id)
                 rcd = RecordSchema(
                     id=r.id,
                     action=r.action,

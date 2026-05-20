@@ -25,6 +25,27 @@ initial_users = [
         pto_assigned=20.0,
         pto_consumed=18.0,
     ),
+    User(
+        name="tpond",
+        fullname="Ted Pond",
+        role=Role.EMPLOYEE,
+        pto_assigned=20.0,
+        pto_consumed=12.0,
+    ),
+    User(
+        name="jbond",
+        fullname="James Bond",
+        role=Role.MANAGER,
+        pto_assigned=20.0,
+        pto_consumed=2.0,
+    ),
+    User(
+        name="tgold",
+        fullname="Tom Goldstein",
+        role=Role.VP,
+        pto_assigned=20.0,
+        pto_consumed=10.0,
+    ),
 ]
 
 

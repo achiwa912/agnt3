@@ -37,6 +37,8 @@ class Action:
     AUDIT_FLAGGED = "audit_flagged"
     AUDIT_OK = "audit_ok"
     AUDIT_NG = "audit_ng"
+    RESUBMITTED = "resubmitted"
+    CANCELLED = "cancelled"
 
 
 class Base(DeclarativeBase):

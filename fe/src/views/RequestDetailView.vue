@@ -1,23 +1,25 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRoute, RouterLink } from 'vue-router'
+import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useUserStore } from '../stores/user'
 
 const req = ref(null)
 const rcrds = ref([])
 const userStore = useUserStore()
 const route = useRoute()
+const router = useRouter()
 const loading = ref(true)
 const showEditModal = ref(false)
 const editForm = ref({ request: '' })
 const reqId = route.params.id
 
-const canCancel = () => { return true }
-const canAppeal = () => { return (req.value?.decision === 'denied' && req.value?.decider_id == 1) }
-const canEdit = () => { return req.value?.decision !== 'approved' }
+const canCancel = () => { return req.value?.status !== 'cancelled' }
+const canAppeal = () => { return (req.value?.decision === 'denied' && req.value?.decider_id == 1 && req.value?.status !== 'cancelled') }
+const canEdit = () => { return (req.value?.decision !== 'approved' || req.value?.status === 'cancelled') }
 
-const cancelRequest = async () => {
-  req.status = 'cancelled'
+const appealRequest = async () => {
+  const sts = userStore.user.role === 'employee' ? 'pending_manager' : 'pening_vp'
+  const act = userStore.user.role === 'employee' ? 'deferred_to_manager' : 'deferred_to_vp'
   const res = await fetch(
     `http://localhost:8001/requests/${reqId}`,
     {
@@ -25,13 +27,59 @@ const cancelRequest = async () => {
       headers: {
 	'Content-Type': 'application/json'
       },
-      body: JSON.stringify(req.value)
+      body: JSON.stringify({ status: sts, action: act, action_by: userStore.user.name })
     }
   )
+  req.value = await (await fetch(`http://localhost:8001/requests/${reqId}`)).json()
+  rcrds.value = await (await fetch(`http://localhost:8001/requests/${reqId}/records`)).json()
 }
 
+const cancelRequest = async () => {
+  const res = await fetch(
+    `http://localhost:8001/requests/${reqId}`,
+    {
+      method: 'PATCH',
+      headers: {
+	'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ status: 'cancelled', action: 'cancelled', action_by: userStore.user.name })
+    }
+  )
+  req.value = await (await fetch(`http://localhost:8001/requests/${reqId}`)).json()
+  rcrds.value = await (await fetch(`http://localhost:8001/requests/${reqId}/records`)).json()
+}
+
+const resubmitRequest = async () => {
+  const reqtxt = editForm.value.request.trim()
+  if (!reqtxt) return
+
+  closeEditModal()
+  const res = await fetch(
+    `http://localhost:8001/requests/${reqId}`,
+    {
+      method: 'PATCH',
+      headers: {
+	'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ request: reqtxt, status: 'processing', action: 'resubmitted', action_by: userStore.user.name })
+    }
+  )
+  req.value = await (await fetch(`http://localhost:8001/requests/${reqId}`)).json()
+  rcrds.value = await (await fetch(`http://localhost:8001/requests/${reqId}/records`)).json()
+}
+
+const openEditModal = () => {
+  editForm.value.request = req.value?.request || ''
+  showEditModal.value = true
+}
+
+const closeEditModal = () => {
+  editForm.value.request = ''
+  showEditModal.value = false
+}
 
 onMounted(async () => {
+  userStore.loadUser()
   let res = await fetch(`http://localhost:8001/requests/${reqId}`)
   req.value = await res.json()
   res = await fetch(`http://localhost:8001/requests/${reqId}/records`)
@@ -92,7 +140,7 @@ onMounted(async () => {
 		'badge-info': req.status?.includes('pending'),
 		'badge-success': req.decision === 'approved',
 		'badge-error': req.decision === 'denied',
-		'badge-warning': req.status?.includes('pending')
+		'badge-warning': req.status?.includes('pending') || req.status?.includes('cancelled')
               }">
               {{ req.status }}
             </span>
@@ -169,7 +217,7 @@ onMounted(async () => {
 	<!-- Edit & Resubmit -->
 	<button 
           v-if="canEdit()"
-          @click="showEditModal = true"
+          @click="openEditModal"
           class="btn btn-primary rounded-2xl px-6">
           Edit & Resubmit
 	</button>
@@ -189,7 +237,7 @@ onMounted(async () => {
 	placeholder="Update your request..."></textarea>
 
       <div class="modal-action mt-6">
-	<button @click="showEditModal = false" class="btn btn-ghost rounded-2xl">Cancel</button>
+	<button @click="closeEditModal" class="btn btn-ghost rounded-2xl">Cancel</button>
 	<button @click="resubmitRequest" class="btn btn-primary rounded-2xl">Resubmit Request</button>
       </div>
     </div>

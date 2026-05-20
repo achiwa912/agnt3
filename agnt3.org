@@ -569,4 +569,59 @@ fe/src/views/RequestListView.vue
   - linked from a row (might want to change to a view icon)
   - Creating request detail page
 
+- 5/20 16:07
+#+begin_src 
+Project: agnt3 (Sandbox Compliance Officer)
+AI agent system for HR/Compliance automation with Human-in-the-Loop (HITL) gating.
 
+## Tech Stack
+Agent: PydanticAI + Gemini (gemini-2.5-flash-lite) / Ollama (qwen3:8b) switchable
+Tools: MCP Python SDK, streamable-http transport, port 8000
+DB: SQLite + SQLAlchemy async (aiosqlite), file at db/db.db
+Frontend: Vue 3 + Vite + DaisyUI/Tailwind (emerald theme), port 5173
+API: FastAPI, port 8001
+
+## Directory layout
+mcp/server.py — FastMCP server, read_policy tool, policy/ dir
+agent/agent.py — PydanticAI agent, run_agent(), process_request()
+db/models.py — SQLAlchemy ORM: User, Request, Record + constants (Role, Status, Action, Decision)
+db/database.py — async engine, async_sessionmaker, init_db()
+db/seed.py — seeds llm (id=1), jsmith (id=2, employee), flake (id=3, manager), tpond (id=4, employee), jbond (id=5, manager), tgold (id=6, vp)
+db/crud.py — create_request, create_record, update_request, get_user, get_user_by_id, get_users, get_requests, get_request, get_records
+policy/pto_policy.md — POL-001 through POL-010
+api/main.py — FastAPI endpoints: GET /users, GET /users/{user_id}, GET /users/{user_id}/requests, POST /requests, PATCH /requests/{request_id}, GET /requests/{request_id}, GET /requests/{request_id}/records
+fe/src/main.js — app entry
+fe/src/style.css — Tailwind + daisyUI config
+fe/src/App.vue — root, just <RouterView />
+fe/src/router/index.js — routes + navigation guard with sessionStorage rehydration
+fe/src/stores/user.js — Pinia store: user, setUser(), loadUser()
+fe/src/views/LoginView.vue — user dropdown, sets store, redirects to /requests
+fe/src/views/RequestListView.vue — navbar, stats (PTO, denied, waiting), request table with tooltip + row click nav, new request modal with POST /requests + list reload
+fe/src/views/RequestDetailView.vue — request detail, cancel/appeal/edit+resubmit actions, record history, router.go(0) reload after actions
+
+## Key design decisions
+LLM approves, denies, or defers — humans cancel/appeal/override from dashboard
+Constants as plain classes (not Enum) — stored as lowercase strings
+policy_ids stored as JSON column on Request
+All crud functions assume an already-begun session
+sessionStorage persists login; loadUser() called in onMounted
+action_by sent as username string from frontend, looked up via get_user(s, username) in endpoint
+update_request always called in patch_request for all actions; resubmitted also triggers run_agent + process_request after
+update_request handles create_record internally, branching by action: resubmitted stores request, cancelled stores status only, others store reason+decision
+s.add(req) removed from update_request (no-op; identity map tracks mutations)
+
+## Manager/VP view (next to build)
+Accessible from top-right menu in navbar (only for manager/vp role)
+Toggle: pending_manager (default) / all non-vp-decided requests (override mode)
+Approve/deny directly (no agent) — sets decision, decider_id, status=decided
+VP view: same pattern but for pending_vp
+New endpoint needed: GET /requests?status=pending_manager (or similar filter)
+
+
+## Learning Approach
+Problem-by-problem (same pedagogy as ragev frontend project)
+Don't give complete code first — guide toward the solution
+Concise answers with links to official docs where relevant
+Prefer complete files over diffs when code is eventually provided
+No asterisk-based bullet/header formatting (org-mode compatibility)
+#+end_src

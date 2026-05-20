@@ -32,12 +32,12 @@ const handleSubmit = async () => {
       }
     )
     loading.value = false
-    const res2 = await fetch(`http://localhost:8001/requests/${userStore.user.id}`)
+    const res2 = await fetch(`http://localhost:8001/users/${userStore.user.id}/requests`)
     requests.value = await res2.json()
   }
 }
 const denied = computed(() => requests.value.filter(r => r.decision === 'denied').length)
-const waiting = computed(() => requests.value.filter(r => r.status !== 'decided').length)
+const waiting = computed(() => requests.value.filter(r => (!['decided', 'cancelled'].includes(r.status))).length)
 
 onMounted(async () => {
   const res = await fetch(`http://localhost:8001/users/${userStore.user.id}/requests`)
@@ -226,8 +226,7 @@ onMounted(async () => {
               'badge-info': req.status.includes('pending'),
               'badge-success': req.decision === 'approved',
               'badge-error': req.decision === 'denied',
-              'badge-warning': req.status === 'pending_vp'
-            }">
+	      'badge-warning': req.status?.includes('pending') || req.status?.includes('cancelled')            }">
             {{ req.status }}
           </span>
 	</div>

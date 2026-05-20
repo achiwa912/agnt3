@@ -24,39 +24,64 @@ async def create_request(
     return req
 
 
-async def update_request_status(
+async def update_request(
     s,
     request_id: int,
-    status: str,
     action: str,
     action_by: int,
-    policy_ids: list[str],
+    request: Optional[str] = None,
     reason: Optional[str] = None,
+    status: Optional[str] = None,
     decision: Optional[str] = None,
+    policy_ids: Optional[list[str]] = None,
+    requester_id: Optional[int] = None,
     decider_id: Optional[int] = None,
 ) -> Request:
     """assuming session: s is already begun"""
     result = await s.execute(select(Request).where(Request.id == request_id))
     req = result.scalar_one()
+    if request:
+        req.request = request
     if reason:
         req.reason = reason
-    req.status = status
+    if status:
+        req.status = status
     if decision:
         req.decision = decision
         req.decided_at = datetime.now(timezone.utc)
         req.decider_id = decider_id
     if policy_ids:
         req.policy_ids = policy_ids
-    s.add(req)
-    await create_record(
-        s,
-        request_id=req.id,
-        action=action,
-        reason=req.reason,
-        decision=req.decision,
-        status=status,
-        user_id=action_by,
-    )
+    if requester_id:
+        req.requester_id = requester_id
+    # s.add(req)
+    if action == Action.RESUBMITTED:
+        await create_record(
+            s,
+            request_id=req.id,
+            action=action,
+            request=req.request,
+            status=status,
+            user_id=action_by,
+        )
+    elif action == Action.CANCELLED:
+        await create_record(
+            s,
+            request_id=req.id,
+            action=action,
+            status=status,
+            user_id=action_by,
+        )
+    else:
+        await create_record(
+            s,
+            request_id=req.id,
+            action=action,
+            reason=req.reason,
+            decision=req.decision,
+            status=status,
+            user_id=action_by,
+        )
     return req
 
 

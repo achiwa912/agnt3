@@ -13,7 +13,7 @@ from pydantic_ai.models.ollama import OllamaModel
 from pydantic_ai.providers.ollama import OllamaProvider
 from pydantic_ai.exceptions import ModelHTTPError
 from db.database import session
-from db.crud import get_user, create_request, update_request_status
+from db.crud import get_user, create_request, update_request
 from db.models import Role, Status, Action, Decision
 
 
@@ -72,17 +72,17 @@ async def process_request(s, req_id, user_id, result, llm_id):
         Action.DEFERRED_TO_VP,
     ]:
         # Deferred
-        await update_request_status(
+        await update_request(
             s,
             req_id,
+            action=result.output.llm_decision,
+            action_by=llm_id,
             reason=result.output.reason,
             status=(
                 Status.PENDING_MANAGER
                 if (result.output.llm_decision == Action.DEFERRED_TO_MANAGER)
                 else Status.PENDING_VP
             ),
-            action=result.output.llm_decision,
-            action_by=llm_id,
             policy_ids=result.output.policy_ids,
         )
     else:
@@ -91,13 +91,13 @@ async def process_request(s, req_id, user_id, result, llm_id):
             if result.output.llm_decision == Action.APPROVED
             else Decision.DENIED
         )
-        await update_request_status(
+        await update_request(
             s,
             req_id,
-            reason=result.output.reason,
-            status=Status.DECIDED,
             action=result.output.llm_decision,
             action_by=llm_id,
+            reason=result.output.reason,
+            status=Status.DECIDED,
             decision=final_decision,
             decider_id=llm_id,
             policy_ids=result.output.policy_ids,
