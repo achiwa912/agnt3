@@ -1,7 +1,7 @@
 from datetime import datetime
 import asyncio
 from typing import Optional, List
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from db.models import Request
@@ -41,28 +41,65 @@ class RequestSchema(BaseModel):
     decider: Optional[str] = None
 
 
-@app.get("/users/{user_id}/requests")
-async def list_requests(user_id: int) -> List[RequestSchema]:
+# @app.get("/users/{user_id}/requests")
+# async def list_requests(user_id: int) -> List[RequestSchema]:
+#     async with session() as s:
+#         async with s.begin():
+#             requests = await get_requests(s, user_id)
+
+#     reqs = []
+#     for r in requests:
+#         req = RequestSchema(
+#             id=r.id,
+#             request=r.request,
+#             reason=r.reason,
+#             status=r.status,
+#             decision=r.decision,
+#             policy_ids=r.policy_ids,
+#             created_at=r.created_at,
+#             decided_at=r.decided_at,
+#             requester_id=r.requester_id,
+#             decider_id=r.decider_id,
+#             decider="",
+#         )
+#         reqs.append(req)
+#     return reqs
+
+
+@app.get("/requests", response_model=List[RequestSchema])
+async def get_requests_ep(
+    user_id: Optional[int],
+    statuses: Optional[List[str]] = Query(None),
+    exclude_role: Optional[str] = None,
+):
+    reqs = []
     async with session() as s:
         async with s.begin():
-            requests = await get_requests(s, user_id)
+            if statuses or exclude_role:
+                requests = await get_requests(
+                    s, user_id, statuses=statuses, exclude_role=exclude_role
+                )
+            else:
+                requests = await get_requests(s, user_id)
 
-    reqs = []
-    for r in requests:
-        req = RequestSchema(
-            id=r.id,
-            request=r.request,
-            reason=r.reason,
-            status=r.status,
-            decision=r.decision,
-            policy_ids=r.policy_ids,
-            created_at=r.created_at,
-            decided_at=r.decided_at,
-            requester_id=r.requester_id,
-            decider_id=r.decider_id,
-            decider="",
-        )
-        reqs.append(req)
+            users_list = await get_users(s)
+            user_map = {u.id: u.fullname for u in users_list}
+            for r in requests:
+                fullname = user_map.get(r.decider_id, "") if r.decider_id else ""
+                req = RequestSchema(
+                    id=r.id,
+                    request=r.request,
+                    reason=r.reason,
+                    status=r.status,
+                    decision=r.decision,
+                    policy_ids=r.policy_ids,
+                    created_at=r.created_at,
+                    decided_at=r.decided_at,
+                    requester_id=r.requester_id,
+                    decider_id=r.decider_id,
+                    decider=fullname,
+                )
+                reqs.append(req)
     return reqs
 
 

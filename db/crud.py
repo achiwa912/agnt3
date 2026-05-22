@@ -129,11 +129,31 @@ async def get_users(s) -> List[User]:
     return result.scalars().all()
 
 
-async def get_requests(s, user_id: int) -> List[Request]:
+async def get_requests(
+    s,
+    user_id: int,
+    statuses: Optional[List[str]] = None,
+    exclude_role: Optional[str] = None,
+) -> List[Request]:
     """assuming session: s is already begun"""
-    result = await s.execute(
-        select(Request).where(Request.requester_id == user_id).order_by(Request.id)
-    )
+    if exclude_role:  # manager override
+        stmt = (
+            select(Request)
+            .outerjoin(User, User.id == Request.decider_id)
+            .where(
+                Request.status.in_(statuses),
+                ((User.role != Role.VP) | (Request.decider_id.is_(None))),
+            )
+            .order_by(Request.id)
+        )
+    elif statuses:  # for other cases
+        stmt = select(Request).where(Request.status.in_(statuses)).order_by(Request.id)
+    else:  # list my requests
+        stmt = (
+            select(Request).where(Request.requester_id == user_id).order_by(Request.id)
+        )
+
+    result = await s.execute(stmt)
     return result.scalars().all()
 
 

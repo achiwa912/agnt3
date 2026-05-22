@@ -9,6 +9,9 @@ const modalRef = ref(null)
 const newreq = ref('')
 const loading = ref(false)
 const router = useRouter()
+const activeTab = ref('my-requests')
+
+let params = ''
 
 const openModal = () => { modalRef.value?.showModal() }
 const closeModal = () => { modalRef.value?.close() }
@@ -32,7 +35,9 @@ const handleSubmit = async () => {
       }
     )
     loading.value = false
-    const res2 = await fetch(`http://localhost:8001/users/${userStore.user.id}/requests`)
+    params = new URLSearchParams()
+    params.append('user_id', userStore.user.id)
+    const res2 = await fetch(`http://localhost:8001/requests?${params.toString()}`)
     requests.value = await res2.json()
   }
 }
@@ -40,7 +45,9 @@ const denied = computed(() => requests.value.filter(r => r.decision === 'denied'
 const waiting = computed(() => requests.value.filter(r => (!['decided', 'cancelled'].includes(r.status))).length)
 
 onMounted(async () => {
-  const res = await fetch(`http://localhost:8001/users/${userStore.user.id}/requests`)
+  params = new URLSearchParams()
+  params.append('user_id', userStore.user.id)
+  const res = await fetch(`http://localhost:8001/requests?${params.toString()}`)
   requests.value = await res.json()
 })
 
@@ -195,56 +202,72 @@ onMounted(async () => {
       <!-- Optional: Add filter/search here later -->
     </div>
 
-    <div class="space-y-4">
-      <div 
-	v-for="req in requests" 
-	:key="req.id"
-	@click="router.push(`/requests/${req.id}`)"
-	class="group bg-base-100 hover:bg-base-200 border border-base-200 rounded-3xl px-6 py-5 
-               transition-all duration-300 hover:shadow-xl cursor-pointer flex items-center gap-6"
-	:title="(['pending_manager', 'pending_vp'].includes(req.status)) || (req.decision === 'denied') ? req.reason : ''"
-      >
-      
-	<!-- ID -->
-	<div class="w-20 font-mono text-sm text-base-content/70">
-          #{{ req.id }}
-	</div>
+    <div class="tabs tabs-border mb-6">
+      <a class="tab" :class="{ 'tab-active': activeTab === 'my-requests' }" @click="activeTab = 'my-requests'" checked>My Requests</a>
+      <a class="tab" :class="{ 'tab-active': activeTab === 'approval' }" @click="activeTab = 'approval'">Approval</a>
+    </div>
 
-	<!-- Main Content -->
-	<div class="flex-1 min-w-0">
-          <p class="font-medium text-base truncate">{{ req.request }}</p>
-          <p class="text-sm text-base-content/60 mt-1">
-            {{ req.created_at }}
-          </p>
-	</div>
 
-	<!-- Status -->
-	<div>
-          <span 
-            class="badge px-5 py-3 text-sm font-medium"
-            :class="{
-              'badge-info': req.status.includes('pending'),
-              'badge-success': req.decision === 'approved',
-              'badge-error': req.decision === 'denied',
-	      'badge-warning': req.status?.includes('pending') || req.status?.includes('cancelled')            }">
-            {{ req.status }}
-          </span>
-	</div>
+    
+    <div class="mt-4">
+      <div v-if="activeTab === 'my-requests'">
+	<div class="space-y-4">
+	  <div 
+	    v-for="req in requests" 
+	    :key="req.id"
+	    @click="router.push(`/requests/${req.id}`)"
+	    class="group bg-base-100 hover:bg-base-200 border border-base-200 rounded-3xl px-6 py-5 
+		   transition-all duration-300 hover:shadow-xl cursor-pointer flex items-center gap-6"
+	    :title="(['pending_manager', 'pending_vp'].includes(req.status)) || (req.decision === 'denied') ? req.reason : ''"
+	  >
+	    
+	    <!-- ID -->
+	    <div class="w-20 font-mono text-sm text-base-content/70">
+              #{{ req.id }}
+	    </div>
 
-	<!-- Decision -->
-	<div class="w-28 text-center">
-          <span 
-            class="inline-block px-4 py-1.5 rounded-2xl text-sm font-medium"
-            :class="{
-              'bg-success/10 text-success': req.decision === 'approved',
-              'bg-error/10 text-error': req.decision === 'denied',
-              'bg-warning/10 text-warning': !req.decision || req.decision === 'pending'
-            }">
-            {{ req.decision || '—' }}
-          </span>
-	</div>
+	    <!-- Main Content -->
+	    <div class="flex-1 min-w-0">
+              <p class="font-medium text-base truncate">{{ req.request }}</p>
+              <p class="text-sm text-base-content/60 mt-1">
+		{{ req.created_at }}
+              </p>
+	    </div>
 
+	    <!-- Status -->
+	    <div>
+              <span 
+		class="badge px-5 py-3 text-sm font-medium"
+		:class="{
+		  'badge-info': req.status.includes('pending'),
+		  'badge-success': req.decision === 'approved',
+		  'badge-error': req.decision === 'denied',
+		  'badge-warning': req.status?.includes('pending') || req.status?.includes('cancelled')            }">
+		{{ req.status }}
+              </span>
+	    </div>
+
+	    <!-- Decision -->
+	    <div class="w-28 text-center">
+              <span 
+		class="inline-block px-4 py-1.5 rounded-2xl text-sm font-medium"
+		:class="{
+		  'bg-success/10 text-success': req.decision === 'approved',
+		  'bg-error/10 text-error': req.decision === 'denied',
+		  'bg-warning/10 text-warning': !req.decision || req.decision === 'pending'
+		}">
+		{{ req.decision || '—' }}
+              </span>
+	    </div>
+
+	  </div>
+	</div>
       </div>
+
+      <!-- approval tab -->
+      <div v-else-if="activeTab === 'approval'">adding logic later
+      </div>
+
     </div>
   </div>
 </template>

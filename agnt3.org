@@ -610,7 +610,7 @@ update_request always called in patch_request for all actions; resubmitted also 
 update_request handles create_record internally, branching by action: resubmitted stores request, cancelled stores status only, others store reason+decision
 s.add(req) removed from update_request (no-op; identity map tracks mutations)
 
-## Manager/VP view (next to build)
+## Manager/VP view (next to build; prob 10)
 Accessible from top-right menu in navbar (only for manager/vp role)
 Toggle: pending_manager (default) / all non-vp-decided requests (override mode)
 Approve/deny directly (no agent) — sets decision, decider_id, status=decided
@@ -620,8 +620,24 @@ New endpoint needed: GET /requests?status=pending_manager (or similar filter)
 
 ## Learning Approach
 Problem-by-problem (same pedagogy as ragev frontend project)
-Don't give complete code first — guide toward the solution
+Don't give code first — guide toward the solution
 Concise answers with links to official docs where relevant
 Prefer complete files over diffs when code is eventually provided
 No asterisk-based bullet/header formatting (org-mode compatibility)
+
 #+end_src
+
+*** Prob 10; Manager/VP view
+
+**** get_requests
+- current -> statuses: None, exclude_role == None
+  - User.id == user_id
+- manager approval -> statuses: 'pending_manager', exclude_role == None
+  - status == pending_manager
+- manager override -> statuses: ['decided', 'pending_manager'], exclude_role: 'vp'
+  - status == decided, pending_manager
+  - role != vp
+- vp approval -> statuses: 'pending_vp', exclude_role == None
+  - status == pending_vp
+- vp overwride  -> statuses = ['decided', 'pending_manager', 'pending_vp'], exclude_role == None
+  - status == decided, pending_manager, pending_vp
