@@ -4,16 +4,27 @@ import { RouterLink, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 
 const requests = ref([])
+const approvalRequests = ref([])
+const overrideRequests = ref([])
 const userStore = useUserStore()
 const modalRef = ref(null)
 const newreq = ref('')
 const loading = ref(false)
 const router = useRouter()
 const activeTab = ref('my-requests')
+const selectedRequest = ref(null)
+const decisionReason = ref('')
+const modalDecisionRef = ref(null)
 
 let params = ''
 
 const openModal = () => { modalRef.value?.showModal() }
+const openDecisionModal = (req) => {
+  decisionReason.value = ''
+  selectedRequest.value = req
+  modalDecisionRef.value?.showModal()
+}
+const closeDecisionModal = () => { modalDecisionRef.value?.close() }
 const closeModal = () => { modalRef.value?.close() }
 const handleSubmit = async () => {
   if (newreq.value.trim()) {
@@ -41,14 +52,78 @@ const handleSubmit = async () => {
     requests.value = await res2.json()
   }
 }
+const handleDecision = async (action) => {
+  if (decisionReason.value.trim()) {
+    closeDecisionModal()
+    let res = null
+    res = await fetch(
+      `http://localhost:8001/requests/${selectedRequest.value.id}`,
+      {
+	method: 'PATCH',
+	headers: {
+	  'Content-Type': 'application/json'
+	},
+	body: JSON.stringify({
+	  status: 'decided',
+	  reason: decisionReason.value.trim(),
+	  decision: action,
+	  decider_id: userStore.user.id,
+	  action: action,
+	  action_by: userStore.user.name,
+	})
+      }
+    )
+    await fetchTab(activeTab.value)
+  }
+}
+
+
 const denied = computed(() => requests.value.filter(r => r.decision === 'denied').length)
 const waiting = computed(() => requests.value.filter(r => (!['decided', 'cancelled'].includes(r.status))).length)
 
+
+async function fetchTab(tabName) {
+  let params = new URLSearchParams()
+  let statuses = null
+  let exclude_role = null
+  if (userStore.user.role === 'manager') {
+    if (tabName === 'approval') {
+      statuses = ['pending_manager']
+    } else {
+      statuses = ['pending_manager', 'decided']
+      exclude_role = 'vp'
+    }
+  } else {
+    if (tabName === 'approval') {
+      statuses = ['pending_vp']
+    } else {
+      statuses = ['pending_manager', 'pending_vp', 'decided']
+    }
+  }
+  for (let status of statuses) {
+    params.append('statuses', status)
+  }
+  if (exclude_role) {
+    params.append('exclude_role', exclude_role)
+  }
+  const res = await fetch(`http://localhost:8001/requests?${params.toString()}`)
+  if (tabName === 'approval') {
+    approvalRequests.value = await res.json()
+  } else {
+    overrideRequests.value = await res.json()
+  }
+}
+      
+
 onMounted(async () => {
-  params = new URLSearchParams()
+	params = new URLSearchParams()
   params.append('user_id', userStore.user.id)
   const res = await fetch(`http://localhost:8001/requests?${params.toString()}`)
   requests.value = await res.json()
+  if (['manager', 'vp'].includes(userStore.user.role)) {
+    await fetchTab('approval')
+    await fetchTab('override')
+  }
 })
 
 </script>
@@ -204,12 +279,12 @@ onMounted(async () => {
 
     <div class="tabs tabs-border mb-6">
       <a class="tab" :class="{ 'tab-active': activeTab === 'my-requests' }" @click="activeTab = 'my-requests'" checked>My Requests</a>
-      <a class="tab" :class="{ 'tab-active': activeTab === 'approval' }" @click="activeTab = 'approval'">Approval</a>
+      <a v-if="['manager', 'vp'].includes(userStore.user.role)" class="tab" :class="{ 'tab-active': activeTab === 'approval' }" @click="activeTab = 'approval'">Approval</a>
+      <a v-if="['manager', 'vp'].includes(userStore.user.role)" class="tab" :class="{ 'tab-active': activeTab === 'override' }" @click="activeTab = 'override'">Override</a>
     </div>
 
-
-    
     <div class="mt-4">
+      <!-- my requests tab -->
       <div v-if="activeTab === 'my-requests'">
 	<div class="space-y-4">
 	  <div 
@@ -265,9 +340,128 @@ onMounted(async () => {
       </div>
 
       <!-- approval tab -->
-      <div v-else-if="activeTab === 'approval'">adding logic later
+      <div v-else-if="activeTab === 'approval'">
+	<div class="space-y-4">
+	  <div
+	    v-for="req in approvalRequests"
+	    :key="req.id"
+	    @click="openDecisionModal(req)"
+	    class="group bg-base-100 hover:bg-base-200 border border-base-200 rounded-3xl px-6 py-5 transition-all duration-300 hover:shadow-xl cursor-pointer flex items-center gap-6">
+	    
+	    <!-- ID -->
+	    <div class="w-20 font-mono text-sm text-base-content/70">
+              #{{ req.id }}
+	    </div>
+
+	    <!-- Main Content -->
+	    <div class="flex-1 min-w-0">
+              <p class="font-medium text-base truncate">{{ req.request }}</p>
+              <p class="text-sm text-base-content/60 mt-1">
+		{{ req.created_at }}
+              </p>
+	    </div>
+
+	    <!-- Status -->
+	    <div>
+              <span 
+		class="badge px-5 py-3 text-sm font-medium"
+		:class="{
+		  'badge-info': req.status.includes('pending'),
+		  'badge-success': req.decision === 'approved',
+		  'badge-error': req.decision === 'denied',
+		  'badge-warning': req.status?.includes('pending') || req.status?.includes('cancelled')            }">
+		{{ req.status }}
+              </span>
+	    </div>
+
+	    <!-- Decision -->
+	    <div class="w-28 text-center">
+              <span 
+		class="inline-block px-4 py-1.5 rounded-2xl text-sm font-medium"
+		       :class="{
+			 'bg-success/10 text-success': req.decision === 'approved',
+			 'bg-error/10 text-error': req.decision === 'denied',
+			 'bg-warning/10 text-warning': !req.decision || req.decision === 'pending'
+		       }">
+		{{ req.decision || '—' }}
+              </span>
+	    </div>
+	    
+	  </div>
+	</div>
       </div>
 
+      <!-- override tab -->
+      <div v-else-if="activeTab === 'override'">
+	<div class="space-y-4">
+	  <div
+	    v-for="req in overrideRequests"
+	    :key="req.id"
+	    @click="openDecisionModal(req)"
+	    class="group bg-base-100 hover:bg-base-200 border border-base-200 rounded-3xl px-6 py-5 transition-all duration-300 hover:shadow-xl cursor-pointer flex items-center gap-6">
+	    
+	    <!-- ID -->
+	    <div class="w-20 font-mono text-sm text-base-content/70">
+              #{{ req.id }}
+	    </div>
+
+	    <!-- Main Content -->
+	    <div class="flex-1 min-w-0">
+              <p class="font-medium text-base truncate">{{ req.request }}</p>
+              <p class="text-sm text-base-content/60 mt-1">
+		{{ req.created_at }}
+              </p>
+	    </div>
+
+	    <!-- Status -->
+	    <div>
+              <span 
+		class="badge px-5 py-3 text-sm font-medium"
+		:class="{
+		  'badge-info': req.status.includes('pending'),
+		  'badge-success': req.decision === 'approved',
+		  'badge-error': req.decision === 'denied',
+		  'badge-warning': req.status?.includes('pending') || req.status?.includes('cancelled')            }">
+		{{ req.status }}
+              </span>
+	    </div>
+
+	    <!-- Decision -->
+	    <div class="w-28 text-center">
+              <span 
+		class="inline-block px-4 py-1.5 rounded-2xl text-sm font-medium"
+		:class="{
+		  'bg-success/10 text-success': req.decision === 'approved',
+		  'bg-error/10 text-error': req.decision === 'denied',
+		  'bg-warning/10 text-warning': !req.decision || req.decision === 'pending'
+		}">
+		{{ req.decision || '—' }}
+              </span>
+	    </div>
+	    
+	  </div>
+	</div>
+      </div>
+      
     </div>
+
+    <dialog ref="modalDecisionRef" class="modal">
+      <div class="modal-box">
+	<p class="py-4">{{ selectedRequest?.request }}</p>
+	<p>{{ selectedRequest?.created_at }}</p>
+	<p>{{ selectedRequest?.created_by }}</p>
+	<div>
+	  <div class="form-control">
+	    <input v-model="decisionReason" type="text" placeholder="Type request" class="input input-bordered w-full" required />
+	  </div>
+	  <div class="modal-action">
+	    <button type="button" class="btn" @click="closeDecisionModal">Cancel</button>
+	    <button type="button" class="btn btn-primary" @click="handleDecision('approved')">Approve</button>
+	    <button type="button" class="btn btn-secondary" @click="handleDecision('denied')">Deny</button>
+	  </div>
+	</div>
+      </div>
+    </dialog>
+    
   </div>
 </template>
