@@ -135,12 +135,12 @@ flowchart TD
     LLM --> Approved[Approved]
     LLM --> Denied[Denied]
     LLM --> DeferredManager[Deferred to Manager]
+    LLM --> DeferredVP[Deferred to VP]
     
     DeferredManager --> ManagerApproved[Manager Approved]
     DeferredManager --> ManagerDenied[Manager Denied]
-    DeferredManager --> DeferredVP[Deferred to VP]
     
-    DeferredVP --> VPApproved[VP Override Approved]
+    DeferredVP --> VPApproved[VP Approved]
     DeferredVP --> VPDenied[VP Denied]
 
     %% Additional actions
@@ -150,7 +150,7 @@ flowchart TD
         Resubmitted[Resubmitted]
     end
 
-    %% Notes
+    %% Styling
     classDef process fill:#3b82f6,stroke:#1e40af,color:white
     classDef decision fill:#eab308,stroke:#854d0e,color:black
     classDef final fill:#22c55e,stroke:#166534,color:white
