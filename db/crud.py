@@ -1,17 +1,27 @@
 from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import select
-from db.models import Request, Record, Action, User, Status, Role
+from db.models import Request, Record, Action, User, Status, Role, Decision
 from db.database import session
 
 
+async def update_user(s, user_id: int, requested_days_delta: float) -> User:
+    u = await get_user_by_id(s, user_id)
+    if requested_days_delta:
+        u.pto_planned += requested_days_delta
+    return u
+
+
 async def create_request(
-    s, user_id: int, request_text: str, attach_path: Optional[str]
+    s,
+    user_id: int,
+    request_text: str,
+    attach_path: Optional[str],
 ) -> Request:
     """assuming session: s is already begun"""
     req = Request(request=request_text, requester_id=user_id)
     s.add(req)
-    await s.flush()
+    await s.flush()  # materialize request ID
     await create_record(
         s,
         request_id=req.id,
@@ -33,6 +43,7 @@ async def update_request(
     reason: Optional[str] = None,
     status: Optional[str] = None,
     decision: Optional[str] = None,
+    requested_days: Optional[float] = 0.0,
     policy_ids: Optional[list[str]] = None,
     requester_id: Optional[int] = None,
     decider_id: Optional[int] = None,
@@ -40,10 +51,15 @@ async def update_request(
     """assuming session: s is already begun"""
     result = await s.execute(select(Request).where(Request.id == request_id))
     req = result.scalar_one()
+    prev_requested_days = req.requested_days
+    prev_status = req.status
+    prev_decision = req.decision
     if request:
         req.request = request
     if reason:
         req.reason = reason
+    if requested_days:
+        req.requested_days = requested_days
     if status:
         req.status = status
     if decision:
@@ -54,34 +70,33 @@ async def update_request(
         req.policy_ids = policy_ids
     if requester_id:
         req.requester_id = requester_id
-    # s.add(req)
-    if action == Action.RESUBMITTED:
-        await create_record(
-            s,
-            request_id=req.id,
-            action=action,
-            request=req.request,
-            status=status,
-            user_id=action_by,
-        )
-    elif action == Action.CANCELLED:
-        await create_record(
-            s,
-            request_id=req.id,
-            action=action,
-            status=status,
-            user_id=action_by,
-        )
-    else:
-        await create_record(
-            s,
-            request_id=req.id,
-            action=action,
-            reason=req.reason,
-            decision=req.decision,
-            status=status,
-            user_id=action_by,
-        )
+
+    delta = 0.0
+    if (
+        prev_status in [Status.PENDING_MANAGER, Status.PENDING_VP]
+        or prev_decision == Decision.APPROVED
+    ):
+        delta -= prev_requested_days
+    if (
+        status in [Status.PENDING_MANAGER, Status.PENDING_VP]
+        or decision == Decision.APPROVED
+    ):
+        delta += requested_days
+    if delta:
+        await update_user(s, req.requester_id, delta)
+
+    await create_record(
+        s,
+        request_id=req.id,
+        action=action,
+        user_id=action_by,
+        status=req.status,
+        request=req.request,
+        decision=req.decision,
+        reason=req.reason,
+        requested_days=delta,
+    )
+
     return req
 
 
@@ -94,6 +109,7 @@ async def create_record(
     request: Optional[str] = None,
     decision: Optional[str] = None,
     reason: Optional[str] = None,
+    requested_days: Optional[float] = 0.0,
     attach_path: Optional[str] = None,
 ) -> Record:
     """assuming session is already begun. record is not synced yet"""
@@ -104,6 +120,7 @@ async def create_record(
         decision=decision,
         reason=reason,
         status=status,
+        requested_days=requested_days,
         attach_path=attach_path,
         user_id=user_id,
     )
@@ -123,9 +140,12 @@ async def get_user_by_id(s, user_id: int) -> User:
     return result.scalar_one()
 
 
-async def get_users(s) -> List[User]:
+async def get_users(s, exclude_llm: Optional[bool] = True) -> List[User]:
     """assuming session: s is already begun"""
-    result = await s.execute(select(User).where(User.role != Role.LLM))
+    if exclude_llm:
+        result = await s.execute(select(User).where(User.role != Role.LLM))
+    else:
+        result = await s.execute(select(User))
     return result.scalars().all()
 
 

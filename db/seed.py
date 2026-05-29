@@ -10,6 +10,7 @@ initial_users = [
         role=Role.LLM,
         pto_assigned=20.0,
         pto_consumed=0.0,
+        pto_planned=0.0,
     ),
     User(
         name="jsmith",
@@ -17,6 +18,7 @@ initial_users = [
         role=Role.EMPLOYEE,
         pto_assigned=20.0,
         pto_consumed=6.0,
+        pto_planned=0.0,
     ),
     User(
         name="flake",
@@ -24,6 +26,7 @@ initial_users = [
         role=Role.MANAGER,
         pto_assigned=20.0,
         pto_consumed=18.0,
+        pto_planned=0.0,
     ),
     User(
         name="tpond",
@@ -31,6 +34,7 @@ initial_users = [
         role=Role.EMPLOYEE,
         pto_assigned=20.0,
         pto_consumed=12.0,
+        pto_planned=0.0,
     ),
     User(
         name="jbond",
@@ -38,6 +42,7 @@ initial_users = [
         role=Role.MANAGER,
         pto_assigned=20.0,
         pto_consumed=2.0,
+        pto_planned=0.0,
     ),
     User(
         name="tgold",
@@ -45,6 +50,7 @@ initial_users = [
         role=Role.VP,
         pto_assigned=20.0,
         pto_consumed=10.0,
+        pto_planned=0.0,
     ),
 ]
 

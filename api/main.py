@@ -33,42 +33,19 @@ class RequestSchema(BaseModel):
     reason: Optional[str]
     status: str
     decision: Optional[str]
+    requested_days: Optional[float] = None
     policy_ids: Optional[List[str]]
     created_at: datetime
     decided_at: Optional[datetime]
     requester_id: int
+    requester: Optional[str] = None
     decider_id: Optional[int]
     decider: Optional[str] = None
 
 
-# @app.get("/users/{user_id}/requests")
-# async def list_requests(user_id: int) -> List[RequestSchema]:
-#     async with session() as s:
-#         async with s.begin():
-#             requests = await get_requests(s, user_id)
-
-#     reqs = []
-#     for r in requests:
-#         req = RequestSchema(
-#             id=r.id,
-#             request=r.request,
-#             reason=r.reason,
-#             status=r.status,
-#             decision=r.decision,
-#             policy_ids=r.policy_ids,
-#             created_at=r.created_at,
-#             decided_at=r.decided_at,
-#             requester_id=r.requester_id,
-#             decider_id=r.decider_id,
-#             decider="",
-#         )
-#         reqs.append(req)
-#     return reqs
-
-
 @app.get("/requests", response_model=List[RequestSchema])
 async def get_requests_ep(
-    user_id: Optional[int],
+    user_id: Optional[int] = None,
     statuses: Optional[List[str]] = Query(None),
     exclude_role: Optional[str] = None,
 ):
@@ -82,10 +59,11 @@ async def get_requests_ep(
             else:
                 requests = await get_requests(s, user_id)
 
-            users_list = await get_users(s)
+            users_list = await get_users(s, exclude_llm=False)
             user_map = {u.id: u.fullname for u in users_list}
             for r in requests:
-                fullname = user_map.get(r.decider_id, "") if r.decider_id else ""
+                requester = user_map.get(r.requester_id, "") if r.requester_id else ""
+                decider = user_map.get(r.decider_id, "") if r.decider_id else ""
                 req = RequestSchema(
                     id=r.id,
                     request=r.request,
@@ -96,8 +74,9 @@ async def get_requests_ep(
                     created_at=r.created_at,
                     decided_at=r.decided_at,
                     requester_id=r.requester_id,
+                    requester=requester,
                     decider_id=r.decider_id,
-                    decider=fullname,
+                    decider=decider,
                 )
                 reqs.append(req)
     return reqs
@@ -112,11 +91,16 @@ class NewRequestBody(BaseModel):
 async def new_request(body: NewRequestBody):
     async with session() as s:
         async with s.begin():
+            u = await get_user_by_id(s=s, user_id=body.user_id)
+            pto_yellow = u.pto_assigned * 2 / 3 - u.pto_consumed - u.pto_planned
+            pto_red = u.pto_assigned - u.pto_consumed - u.pto_planned
+            req_text = f"I have {pto_yellow} pto_yellow days and {pto_red} pto_red days.  {body.req_text}"
             request = await create_request(
                 s, body.user_id, body.req_text, attach_path=None
             )
+            print(f"req_text: {req_text}")
             async with server:
-                result = await run_agent(body.req_text)
+                result = await run_agent(req_text)
             llm = await get_user(s=s, username="llm")
             await process_request(s, request.id, body.user_id, result, llm.id)
     return request
@@ -130,6 +114,7 @@ class PatchRequestBody(BaseModel):
     status: Optional[str] = None
     decision: Optional[str] = None
     decider_id: Optional[int] = None
+    requested_days: Optional[float] = None
 
 
 @app.patch("/requests/{request_id}", response_model=RequestSchema)
@@ -146,6 +131,8 @@ async def patch_request(request_id: int, body: PatchRequestBody):
             if body.decision:
                 r.decision = body.decision
                 r.decider_id = body.decider_id
+            if body.requested_days:
+                r.requested_days = body.requested_days
             action_by_user = await get_user(s, body.action_by)
             await update_request(
                 s,
@@ -156,14 +143,22 @@ async def patch_request(request_id: int, body: PatchRequestBody):
                 reason=r.reason,
                 status=r.status,
                 decision=r.decision,
+                requested_days=r.requested_days,
                 policy_ids=r.policy_ids,
                 requester_id=r.requester_id,
                 decider_id=r.decider_id,
             )
             if body.action == "resubmitted":
                 r.request = body.request
+
+                u = await get_user_by_id(s=s, user_id=r.requester_id)
+                pto_yellow = u.pto_assigned * 2 / 3 - u.pto_consumed - u.pto_planned
+                pto_red = u.pto_assigned - u.pto_consumed - u.pto_planned
+                req_text = f"I have {pto_yellow} pto_yellow days and {pto_red} pto_red days.  {body.request}"
                 async with server:
-                    result = await run_agent(body.request)
+                    print(f"+++ req_text: {req_text}")
+                    print(f"+++ yellow: {pto_yellow}, red: {pto_red}")
+                    result = await run_agent(req_text)
                     llm = await get_user(s=s, username="llm")
                     await process_request(s, r.id, r.requester_id, result, llm.id)
             return r
@@ -201,6 +196,7 @@ class UserSchema(BaseModel):
     role: Optional[str]
     pto_assigned: Optional[float]
     pto_consumed: Optional[float]
+    pto_planned: Optional[float]
 
 
 @app.get("/users")
@@ -217,6 +213,7 @@ async def list_users() -> List[UserSchema]:
             role=u.role,
             pto_assigned=u.pto_assigned,
             pto_consumed=u.pto_consumed,
+            pto_planned=u.pto_planned,
         )
         usrs.append(usr)
     return usrs
@@ -234,6 +231,7 @@ async def get_user_by_id_endpoint(user_id: int) -> UserSchema:
         role=user.role,
         pto_assigned=user.pto_assigned,
         pto_consumed=user.pto_consumed,
+        pto_planned=user.pto_planned,
     )
 
 

@@ -20,6 +20,7 @@ from db.models import Role, Status, Action, Decision
 class PolicyDecision(BaseModel):
     policy_ids: list[str]
     llm_decision: Literal["approved", "denied", "deferred_to_manager", "deferred_to_vp"]
+    requested_days: float
     reason: str
 
 
@@ -31,21 +32,23 @@ Your job is to read HR requests, cross-reference them against the rules in 'pto_
 CRITICAL LOGIC PROCESS:
 For every request, you must execute your reasoning in this exact order:
 
-1. RULE BALANCING: Identify ALL policy IDs triggered or violated by the request.
-2. EXCEPTION CHECK: For every triggered policy ID, read the text carefully to check if it contains phrases like "VP approval required", "Exceptions are", "review required", or "discretionary". 
+1. DENY NON-PTO REQUEST AND STOP: If no specific number of PTO days is being requested, the decision must be denied and mark as 'denied'.  If no number of PTO days is requested, skip steps 2-4 and STOP.
+2. RULE BALANCING: Identify ALL policy IDs triggered or violated by the request.
+3. EXCEPTION CHECK: For every triggered policy ID, read the text carefully to check if it contains phrases like "VP approval required", "Exceptions are", "review required", or "discretionary". 
    - If ANY triggered policy contains an exceptional or VP approval path, the request CANNOT be flatly denied by you. It MUST be deferred.
-3. DECISION CRITERIA:
-   - "denied": Only if there is a clear-cut violation AND the policy text provides NO exceptional path or VP override.
-   - "approved": Only if there are zero violations AND requested_days + pto_consumed <= 2/3 * pto_assigned.
-   - "defer_to_*": For all other situations. If a policy requires a VP review/approval, set "defer_to_vp". If it requires a standard review, set "defer_to_manager".
+4. DECISION CRITERIA:
+   - "denied": Only if there is a clear-cut violation AND the policy text provides NO exceptional path or VP override.  Or, requested_days > pto_red days.
+   - "approved": Only if there are zero violations AND requested_days <= pto_yellow days.
+   - "deferred_to_*": For all other situations. If a policy requires a VP review/approval, set "deferred_to_vp". If it requires a standard review, set "deferred_to_manager".  Also if pto_yellow < requested_days <= pto_red.
 
-Output your final judgment using the requested JSON schema. Be concise and cite specific rule text in your "reason".
+Output your final judgment using the requested JSON schema. Be concise. Put requested_days to "requested_days" and cite specific rule text in your "reason".
 """
 # model_name = "qwen3:8b"
 # model = OllamaModel(
 #     model_name, provider=OllamaProvider(base_url="http://localhost:11434/v1")
 # )
-model_name = "google-gla:gemini-2.5-flash-lite"
+# model_name = "google-gla:gemini-2.5-flash-lite"
+model_name = "google-gla:gemini-3.1-flash-lite"
 model = model_name
 print(model_name)
 agent = Agent(
@@ -83,14 +86,10 @@ async def process_request(s, req_id, user_id, result, llm_id):
                 if (result.output.llm_decision == Action.DEFERRED_TO_MANAGER)
                 else Status.PENDING_VP
             ),
+            requested_days=result.output.requested_days,
             policy_ids=result.output.policy_ids,
         )
-    else:
-        final_decision = (
-            Decision.APPROVED
-            if result.output.llm_decision == Action.APPROVED
-            else Decision.DENIED
-        )
+    elif result.output.llm_decision == Action.APPROVED:
         await update_request(
             s,
             req_id,
@@ -98,7 +97,21 @@ async def process_request(s, req_id, user_id, result, llm_id):
             action_by=llm_id,
             reason=result.output.reason,
             status=Status.DECIDED,
-            decision=final_decision,
+            decision=Decision.APPROVED,
+            requested_days=result.output.requested_days,
+            decider_id=llm_id,
+            policy_ids=result.output.policy_ids,
+        )
+    else:  # denied
+        await update_request(
+            s,
+            req_id,
+            action=result.output.llm_decision,
+            action_by=llm_id,
+            reason=result.output.reason,
+            status=Status.DECIDED,
+            decision=Decision.DENIED,
+            requested_days=result.output.requested_days,
             decider_id=llm_id,
             policy_ids=result.output.policy_ids,
         )

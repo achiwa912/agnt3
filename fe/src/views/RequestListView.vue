@@ -226,7 +226,7 @@ onMounted(async () => {
 	</div>
 	<div class="stat-title">Available</div>
 	<div class="stat-value text-primary">
-	  {{ userStore.user.pto_assigned - userStore.user.pto_consumed }}
+	  {{ userStore.user.pto_assigned - userStore.user.pto_consumed - userStore.user.pto_planned }} (+{{ userStore.user.pto_planned }})
 	</div>
 	<div class="stat-desc">PTO days</div>
       </div>
@@ -445,23 +445,100 @@ onMounted(async () => {
       
     </div>
 
-    <dialog ref="modalDecisionRef" class="modal">
-      <div class="modal-box">
-	<p class="py-4">{{ selectedRequest?.request }}</p>
-	<p>{{ selectedRequest?.created_at }}</p>
-	<p>{{ selectedRequest?.created_by }}</p>
-	<div>
-	  <div class="form-control">
-	    <input v-model="decisionReason" type="text" placeholder="Type request" class="input input-bordered w-full" required />
-	  </div>
-	  <div class="modal-action">
-	    <button type="button" class="btn" @click="closeDecisionModal">Cancel</button>
-	    <button type="button" class="btn btn-primary" @click="handleDecision('approved')">Approve</button>
-	    <button type="button" class="btn btn-secondary" @click="handleDecision('denied')">Deny</button>
-	  </div>
-	</div>
-      </div>
-    </dialog>
+<dialog ref="modalDecisionRef" class="modal">
+  <div class="modal-box max-w-lg w-full p-0 overflow-hidden rounded-2xl">
     
+    <!-- Header -->
+    <div class="px-6 py-5 border-b border-base-200 bg-base-50">
+      <h3 class="font-semibold text-lg">Decision Review</h3>
+      <p class="text-sm text-base-content/70 mt-1">Review request and make a decision</p>
+    </div>
+
+    <!-- Content -->
+    <div class="p-6 space-y-5">
+      
+      <div>
+        <p class="text-base font-medium leading-relaxed">
+          {{ selectedRequest?.request }}
+        </p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 text-sm">
+        <div>
+          <p class="text-base-content/60 text-xs uppercase tracking-widest mb-1">Requester</p>
+          <p class="font-medium">{{ selectedRequest?.requester }}</p>
+        </div>
+        <div>
+          <p class="text-base-content/60 text-xs uppercase tracking-widest mb-1">Requested On</p>
+          <p class="font-medium">{{ selectedRequest?.created_at }}</p>
+        </div>
+      </div>
+
+      <div>
+        <p class="text-base-content/60 text-xs uppercase tracking-widest mb-1">Reason</p>
+        <p class="text-sm leading-relaxed">{{ selectedRequest?.reason }}</p>
+      </div>
+
+      <!-- Previous Decision -->
+      <div v-if="selectedRequest?.decision" class="bg-base-100 rounded-xl p-4">
+        <p class="text-base-content/60 text-xs uppercase tracking-widest mb-3">Previous Decision</p>
+        
+        <div class="flex items-center gap-3 flex-wrap">
+          <!-- Decision Badge -->
+          <div class="badge badge-lg font-medium"
+               :class="selectedRequest?.decision === 'approved' ? 'badge-success' : 'badge-error'">
+            {{ selectedRequest?.decision }}
+          </div>
+
+          <!-- Status Badge -->
+          <div class="badge badge-lg badge-outline font-medium">
+            {{ selectedRequest?.status }}
+          </div>
+
+          <div class="ml-auto text-right">
+            <p class="font-medium text-sm">{{ selectedRequest?.decider }}</p>
+            <p class="text-xs text-base-content/60">{{ selectedRequest?.decided_at }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Decision Reason Input -->
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text font-medium">Decision Reason</span>
+        </label>
+        <textarea 
+          v-model="decisionReason" 
+          class="textarea textarea-bordered w-full h-24 resize-y min-h-[100px]"
+          placeholder="Explain your decision..."
+          required
+        ></textarea>
+      </div>
+    </div>
+
+    <!-- Footer Actions -->
+    <div class="px-6 py-5 border-t border-base-200 bg-base-50 flex gap-3 justify-end">
+      <button 
+        type="button" 
+        class="btn btn-ghost"
+        @click="closeDecisionModal">
+        Cancel
+      </button>
+      <button 
+        type="button" 
+        class="btn btn-success text-white"
+        @click="handleDecision('approved')">
+        Approve
+      </button>
+      <button 
+        type="button" 
+        class="btn btn-error text-white"
+        @click="handleDecision('denied')">
+        Deny
+      </button>
+    </div>
+  </div>
+</dialog>
+
   </div>
 </template>

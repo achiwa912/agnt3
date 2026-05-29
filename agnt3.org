@@ -750,3 +750,170 @@ Next
 Create test users including VP role (drop/recreate DB, run seed.py)
 End-to-end test: employee submits → manager approves/denies → VP override flow
 #+end_src
+
+#+begin_src 
+source .venv/bin/activate
+uv run python mcp/server.py
+
+source .venv/bin/activate
+rm db/db.db
+uv run python -m db.database
+uv run python -m db.seed
+uvicorn api.main:app --reload --port 8001
+
+
+source .venv/bin/activate
+# uv run python agent/agent.py
+
+cd fe
+pnpm dev
+#+end_src
+
+
+- Well...
+#+begin_src 
+I'd like to take 8 PTO days
+
+Decision
+
+LLM • 2026-05-27T15:34:51.150277
+
+Reason
+
+The employee has 20.0 PTO days assigned and has consumed 12.0 days. They have planned 0.0 days. Requesting 8.0 days brings the total to 20.0 days, which is less than or equal to 2/3 of the assigned PTO (20.0 * 2/3 = 13.33).
+#+end_src
+- Do the math in Python before calling the agent, and inject a pre-computed verdict hint into req_text (e.g. "Note: this request would bring total usage to 20.0 days, exceeding the 2/3 threshold of 13.33 days.")
+
+- changed from 2.5 to google-gla:gemini-3.1-flash-lite
+
+- I have pto_planned in user.  This is number of PTO days requested and haven't been denied yet (ie, either approved or pending).  I need to implement this.  It increases when requested and decreases when denied.
+
+- 5/27 5pm
+#+begin_src 
+Project: agnt3 (Sandbox Compliance Officer)
+AI agent system for HR/Compliance automation with Human-in-the-Loop (HITL) gating.
+
+Tech Stack
+Agent: PydanticAI + Gemini (google-gla:gemini-2.5-flash / gemini-3.1-flash-lite switchable)
+Tools: MCP Python SDK, streamable-http transport, port 8000
+DB: SQLite + SQLAlchemy async (aiosqlite), file at db/db.db
+Frontend: Vue 3 + Vite + DaisyUI/Tailwind (emerald theme), port 5173
+API: FastAPI, port 8001
+
+Startup sequence
+uv run python mcp/server.py
+# uv run python agent/agent.py
+rm db/db.db
+uv run python -m db.database
+uv run python -m db.seed
+uvicorn api.main:app --reload --port 8001
+cd fe && pnpm dev
+
+Directory layout
+mcp/server.py — FastMCP server, read_policy tool, policy/ dir
+agent/agent.py — PydanticAI agent, run_agent(), process_request()
+db/models.py — SQLAlchemy ORM: User, Request, Record + constants (Role, Status, Action, Decision)
+db/database.py — async engine, async_sessionmaker, init_db()
+db/seed.py — seeds llm (id=1), jsmith (id=2, employee), flake (id=3, manager), tpond (id=4, employee), jbond (id=5, manager), tgold (id=6, vp)
+db/crud.py — create_request, create_record, update_request, get_user, get_user_by_id, get_users, get_requests, get_request, get_records
+policy/pto_policy.md — POL-001 through POL-010
+api/main.py — FastAPI endpoints: GET /users, GET /users/{user_id}, GET /users/{user_id}/requests, POST /requests, PATCH /requests/{request_id}, GET /requests/{request_id}, GET /requests/{request_id}/records
+fe/src/main.js — app entry
+fe/src/style.css — Tailwind + daisyUI config
+fe/src/App.vue — root, just <RouterView />
+fe/src/router/index.js — routes + navigation guard with sessionStorage rehydration
+fe/src/stores/user.js — Pinia store: user, setUser(), loadUser()
+fe/src/views/LoginView.vue — user dropdown, sets store, redirects to /requests
+fe/src/views/RequestListView.vue — navbar, stats (PTO, denied, waiting), request table with tooltip + row click nav, new request modal with POST /requests + list reload; 3-tab layout: My Requests / Approval / Override with manager/VP conditional rendering
+fe/src/views/RequestDetailView.vue — request detail, cancel/appeal/edit+resubmit actions, record history, router.go(0) reload after actions
+
+Key design decisions
+LLM approves, denies, or defers — humans cancel/appeal/override from dashboard
+Constants as plain classes (not Enum) — stored as lowercase strings
+policy_ids stored as JSON column on Request
+All crud functions assume an already-begun session
+sessionStorage persists login; loadUser() called in onMounted
+action_by sent as username string from frontend, looked up via get_user(s, username) in endpoint
+update_request always called in patch_request for all actions; resubmitted also triggers run_agent + process_request after
+update_request handles create_record internally, branching by action: resubmitted stores request, cancelled stores status only, others store reason+decision
+s.add(req) removed from update_request (no-op; identity map tracks mutations)
+get_users() has exclude_llm=True default; pass False in get_requests_ep to include LLM in decider name map
+
+Agent / LLM
+PolicyDecision schema: policy_ids: list[str], llm_decision: Literal["approved", "denied", "deferred_to_manager", "deferred_to_vp"], reason: str
+PTO context injected into req_text: pto_yellow (2/3 of assigned minus consumed/planned) and pto_red (assigned minus consumed/planned)
+Decision criteria: approved if requested_days <= pto_yellow; deferred_to_manager if pto_yellow < requested_days <= pto_red; denied if requested_days > pto_red or clear policy violation with no exception path
+gemini-2.5-flash-lite too weak; switched to google-gla:gemini-3.1-flash-lite
+
+Next (Problem 11)
+Implement pto_planned tracking on User:
+- Add requested_days: Optional[float] to PolicyDecision (LLM extracts from request text)
+- Add requested_days column to Request model
+- Pass requested_days through process_request → update_request
+- create_request: increment u.pto_planned += requested_days
+- update_request: decrement u.pto_planned on denied or cancelled
+- Add requested_days to RequestSchema
+- PATCH /requests/{id} body accepts optional requested_days override (for HITL correction)
+- Frontend: show/edit requested_days in approval/override modal
+
+Problem 12 or later
+- add LLM list to choose from on login page
+- modernize login page
+- auditor mode (can view everything)
+- write README.org
+
+Learning Approach (Important!)
+Problem-by-problem (same pedagogy as ragev frontend project)
+Do NOT give code first — guide toward the solution
+Concise answers with links to official docs where relevant
+Prefer complete files over diffs when code is eventually provided
+No asterisk-based bullet/header formatting (org-mode compatibility)
+#+end_src
+
+**** pto_planned and requested_days
+***** events
+- create_request -> no change (requested_days not determined)
+- LLM initial pass; previous status is created
+  - approved, deferred_* -> update pto_planned, requested_days
+  - denied - requested_days
+- requester re-submit; will go through LLM again
+- Manager/VP approve/deny
+- Manager/VP override
+- requester cancel
+
+***** actions for pto_planned
+- LLM approved, deferred_*
+  - prev=created (only) -> +new
+- LLM denied
+  - prev=created (only) -> no change
+- resubmit (NOT incl. LLM action)
+  - prev=pending or approved -> -prev
+  - prev=denied -> no change
+- Manager approved
+  - prev=pending -> no change
+- Manager denied (incl. override)
+  - prev=pending or approved -> -prev
+- Manager override approved
+  - prev=denied -> +new
+  - prev=pending or approved -> -prev+new
+- cancelled
+  - prev=pending or approved -> -prev
+  - prev=denied (or created) -> no change
+
+***** code logic for pto_planned
+- LLM approved, deferred_* (action_by==llm_id, action in [appr, def_*])
+  - prev=created (only) -> +new
+- resubmit (NOT incl. LLM action) (action==resubmit)
+  - prev=pending or approved -> -prev
+- Manager denied (incl. override) (action_by.role in [mngr, vp], action==deny)
+  - prev=pending or approved -> -prev
+- Manager (override) approved  (action_by.role in [mngr, vp], action==appr)
+  - prev=denied -> +new
+  - prev=pending or approved -> -prev+new (might be zero)
+- cancelled (action==cancelled)
+  - prev=pending or approved -> -prev
+
+***** further optimize based only on state change
+- prev_sts in [appr, pend] -> -prev
+- new_sts in [appr, pend] -> +new
+

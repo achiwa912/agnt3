@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import Integer, String, ForeignKey, DateTime, func, JSON
+from sqlalchemy import Integer, String, ForeignKey, DateTime, func, JSON, Float
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -54,6 +54,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     pto_assigned: Mapped[float] = mapped_column(default=0.0)
     pto_consumed: Mapped[float] = mapped_column(default=0.0)
+    pto_planned: Mapped[float] = mapped_column(default=0.0)
     requests: Mapped[list["Request"]] = relationship(
         back_populates="requested_by", foreign_keys="Request.requester_id"
     )
@@ -72,6 +73,7 @@ class Request(Base):
     decision: Mapped[Optional[str]] = mapped_column(
         String(20), default=Decision.UNDECIDED
     )
+    requested_days: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     # poilcy_ids can be [] -> nullable=False
     policy_ids: Mapped[List[str]] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
@@ -104,6 +106,7 @@ class Record(Base):
     decision: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     reason: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, nullable=False)
+    requested_days: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     attach_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     request_id: Mapped[int] = mapped_column(ForeignKey("requests.id"))
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
