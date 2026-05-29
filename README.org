@@ -37,6 +37,35 @@ Humans may cancel, appeal, approve, deny, or override.
 - Persistent PTO planned-day tracking
 - Async-safe CRUD architecture
 
+* Why LLM and MCP
+In agnt3, PTO policies are not hardcoded into application logic.
+
+Instead, policies are maintained as live human-readable documents in: =policy/pto_policy.md= file.  Example:
+#+begin_src 
+### POL-002: Blackout Periods
+- No PTO may be taken during the **Q4 audit window** (December 1st – December 31st).
+- Exceptions are VP approval required
+#+end_src
+
+The policy file may be modified by the organization at any time without redeploying the application.
+
+During request evaluation:
+- the agent retrieves the latest policy document through MCP
+- the LLM reviews the current policy text
+- the request is evaluated against the live policy set
+
+This architecture separates:
+- policy authoring
+- policy retrieval
+- policy reasoning
+- workflow enforcement
+
+The policies themselves are not programmed as deterministic rules.
+
+Instead, the LLM interprets policies expressed in natural language while the surrounding system constrains execution through Human-in-the-Loop approval gates and deterministic backend state management.
+
+This approach allows rapid policy iteration while preserving operational control and auditability.
+
 * Architecture
 #+BEGIN_SRC mermaid
 graph TD
@@ -97,6 +126,43 @@ Human actors remain authoritative.
 
 This architecture mirrors real enterprise governance patterns where AI assists operational decisions but does not become the system of record authority.
 
+* Request Lifecycle
+#+BEGIN_SRC mermaid
+flowchart TD
+    Start[Employee submits PTO request] 
+    --> LLM[LLM evaluates request against policy]
+
+    LLM --> Approved[Approved]
+    LLM --> Denied[Denied]
+    LLM --> DeferredManager[Deferred to Manager]
+    
+    DeferredManager --> ManagerApproved[Manager Approved]
+    DeferredManager --> ManagerDenied[Manager Denied]
+    DeferredManager --> DeferredVP[Deferred to VP]
+    
+    DeferredVP --> VPApproved[VP Override Approved]
+    DeferredVP --> VPDenied[VP Denied]
+
+    %% Additional actions
+    subgraph ExtraActions["Additional Actions"]
+        Cancelled[Cancelled]
+        Appealed[Appealed]
+        Resubmitted[Resubmitted]
+    end
+
+    %% Notes
+    classDef process fill:#3b82f6,stroke:#1e40af,color:white
+    classDef decision fill:#eab308,stroke:#854d0e,color:black
+    classDef final fill:#22c55e,stroke:#166534,color:white
+    classDef extra fill:#8b5cf6,stroke:#4c1d95,color:white
+
+    class Start,LLM process
+    class Approved,ManagerApproved,VPApproved final
+    class Denied,ManagerDenied,VPDenied decision
+    class DeferredManager,DeferredVP decision
+    class Cancelled,Appealed,Resubmitted extra
+#+END_SRC
+
 * PTO Decision Logic
 
 The agent evaluates PTO requests using policy thresholds derived from:
@@ -136,6 +202,21 @@ The backend updates the active model at runtime through:
 - POST /models/{model_name}
 
 This allows comparative experimentation across model capabilities without redeployment.
+
+* Repo layout
+| Path           | Purpose                                              |
+|----------------+------------------------------------------------------|
+| agent/agent.py | PydanticAI orchestration and runtime model switching |
+| api/main.py    | FastAPI endpoints and workflow entrypoints           |
+| db/models.py   | SQLAlchemy ORM models and constants                  |
+| db/crud.py     | Centralized async mutation logic                     |
+| mcp/server.py  | MCP server and policy tool exposure                  |
+| policy/        | Markdown policy documents                            |
+| fe/src/views/  | Vue application views                                |
+| fe/src/stores/ | Pinia state management                               |
+
+The backend intentionally centralizes state mutations inside update_request() to maintain consistent PTO accounting and audit behavior.
+
 
 * Notable Engineering Problems
 
