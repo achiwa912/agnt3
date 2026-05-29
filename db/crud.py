@@ -43,7 +43,7 @@ async def update_request(
     reason: Optional[str] = None,
     status: Optional[str] = None,
     decision: Optional[str] = None,
-    requested_days: Optional[float] = 0.0,
+    requested_days: Optional[float] = None,
     policy_ids: Optional[list[str]] = None,
     requester_id: Optional[int] = None,
     decider_id: Optional[int] = None,
@@ -51,24 +51,31 @@ async def update_request(
     """assuming session: s is already begun"""
     result = await s.execute(select(Request).where(Request.id == request_id))
     req = result.scalar_one()
+
     prev_requested_days = req.requested_days
     prev_status = req.status
     prev_decision = req.decision
-    if request:
+
+    if action in ["cancelled", "resubmitted"]:
+        req.decision = None
+        req.decider_id = None
+        req.decided_at = None
+
+    if request is not None:
         req.request = request
-    if reason:
+    if reason is not None:
         req.reason = reason
-    if requested_days:
+    if requested_days is not None:
         req.requested_days = requested_days
-    if status:
+    if status is not None:
         req.status = status
-    if decision:
+    if decision is not None:
         req.decision = decision
         req.decided_at = datetime.now(timezone.utc)
         req.decider_id = decider_id
-    if policy_ids:
+    if policy_ids is not None:
         req.policy_ids = policy_ids
-    if requester_id:
+    if requester_id is not None:
         req.requester_id = requester_id
 
     delta = 0.0
@@ -81,9 +88,13 @@ async def update_request(
         status in [Status.PENDING_MANAGER, Status.PENDING_VP]
         or decision == Decision.APPROVED
     ):
-        delta += requested_days
-    if delta:
+        delta += requested_days if requested_days is not None else req.requested_days
+    if delta != 0:
         await update_user(s, req.requester_id, delta)
+
+    print(
+        f"++++ {prev_requested_days} {prev_decision} {decision} {delta} {prev_status}"
+    )
 
     await create_record(
         s,

@@ -1,0 +1,197 @@
+#+TITLE: agnt3
+#+SUBTITLE: Sandbox Compliance Officer
+
+AI agent system for HR and compliance automation with Human-in-the-Loop (HITL) gating.
+
+agnt3 is an experimental compliance workflow platform that combines:
+
+* LLM-based policy reasoning
+* deterministic backend state management
+* human approval and override flows
+* audit logging
+* runtime-switchable models
+* async service orchestration
+
+The project simulates enterprise PTO approval workflows where:
+
+* an LLM evaluates requests against policy
+* managers and VPs retain final authority
+* all state transitions are auditable
+* policy decisions remain reviewable and reversible
+
+The goal is not autonomous execution.
+
+The goal is controlled AI-assisted decision making.
+
+#+BEGIN_QUOTE
+LLMs may approve, deny, or defer.
+Humans may cancel, appeal, approve, deny, or override.
+#+END_QUOTE
+
+* Key Features
+
+- PydanticAI agent orchestration
+- MCP server integration using streamable-http transport
+- FastAPI backend with async SQLAlchemy
+- Vue 3 frontend with role-aware dashboard flows
+- Runtime LLM switching
+- Human-in-the-Loop approval gates
+- Full request and decision audit history
+- Policy-driven PTO evaluation
+- Persistent PTO planned-day tracking
+- Async-safe CRUD architecture
+
+* Architecture
+
+#+BEGIN_SRC text
+Vue 3 Frontend
+|
+v
+FastAPI Backend
+|
++--> PydanticAI Agent
+|        |
+|        +--> MCP Policy Tool
+|
++--> SQLite / SQLAlchemy Async ORM
+#+END_SRC
+
+* Technology Stack
+
+| Layer | Technology |
+|-------+------------|
+| Agent | PydanticAI |
+| Models | Gemini 3.1 Flash Lite / Gemini 2.5 Flash Lite / Qwen3:8b |
+| Tooling | MCP Python SDK |
+| Backend | FastAPI |
+| ORM | SQLAlchemy Async |
+| Database | SQLite + aiosqlite |
+| Frontend | Vue 3 + Vite |
+| UI | Tailwind + DaisyUI |
+| State | Pinia |
+
+* Human-in-the-Loop Design
+
+The LLM is intentionally constrained.
+
+The agent can:
+
+* approve requests
+* deny requests
+* defer requests upward
+
+The agent cannot:
+
+* finalize managerial overrides
+* bypass approval chains
+* mutate policy
+* execute unrestricted actions
+
+Human actors remain authoritative.
+
+This architecture mirrors real enterprise governance patterns where AI assists operational decisions but does not become the system of record authority.
+
+* PTO Decision Logic
+
+The agent evaluates PTO requests using policy thresholds derived from:
+
+* PTO assigned
+* PTO consumed
+* PTO already planned
+
+Two thresholds are injected into the prompt context:
+
+* pto_yellow
+* pto_red
+
+Decision behavior:
+
+| Condition | Result |
+|-----------+--------|
+| requested_days <= pto_yellow | approved |
+| pto_yellow < requested_days <= pto_red | deferred_to_manager |
+| requested_days > pto_red | denied |
+
+Clear policy violations may also result in denial.
+
+* Runtime Model Switching
+
+Models are selectable at login time.
+
+Current supported models:
+
+* google-gla:gemini-3.1-flash-lite
+* google-gla:gemini-2.5-flash-lite
+* qwen3:8b
+
+The backend updates the active model at runtime through:
+
+* GET /models
+* POST /models/{model_name}
+
+This allows comparative experimentation across model capabilities without redeployment.
+
+* Notable Engineering Problems
+
+** Problem 11 — PTO Planned-Day Tracking
+
+One of the most important backend problems involved maintaining correct PTO accounting across:
+
+* approvals
+* denials
+* cancellations
+* appeals
+* resubmissions
+* overrides
+
+The solution required:
+
+* state-transition delta accounting
+* audit persistence
+* careful handling of SQLAlchemy identity-map behavior
+* centralized mutation logic inside update_request()
+
+A major bug was discovered where mutating ORM entities before calling update_request() corrupted previous-state tracking because both references pointed to the same identity-mapped object.
+
+The fix:
+
+* avoid pre-mutation in PATCH handlers
+* preserve previous state before mutation
+* centralize all request mutation logic
+
+This became the core consistency mechanism of the system.
+
+* Startup
+
+#+BEGIN_SRC bash
+uv run python mcp/server.py
+
+rm db/db.db
+
+uv run python -m db.database
+uv run python -m db.seed
+
+uvicorn api.main:app --reload --port 8001
+
+cd fe
+pnpm dev
+#+END_SRC
+
+* Ports
+
+| Service | Port |
+|---------+------|
+| MCP Server | 8000 |
+| FastAPI | 8001 |
+| Vite Frontend | 5173 |
+
+* Future Work
+
+- Auditor mode
+- Expanded policy engine
+- Multi-policy evaluation
+- Additional MCP tools
+- Better observability
+- Containerized deployment
+- Integration testing
+- Prompt/version tracking

@@ -1,11 +1,12 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
-import { useUserStore } from '../stores/user'
+import { useUserStore, useLlmStore } from '../stores/user'
 
 const req = ref(null)
 const rcrds = ref([])
 const userStore = useUserStore()
+const llmStore = useLlmStore()
 const route = useRoute()
 const router = useRouter()
 const loading = ref(true)
@@ -42,9 +43,14 @@ const cancelRequest = async () => {
       headers: {
 	'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ status: 'cancelled', action: 'cancelled', action_by: userStore.user.name })
+      body: JSON.stringify({
+	status: 'cancelled',
+	action: 'cancelled',
+	action_by: userStore.user.name,
+      })
     }
   )
+  await userStore.refreshUser()
   req.value = await (await fetch(`http://localhost:8001/requests/${reqId}`)).json()
   rcrds.value = await (await fetch(`http://localhost:8001/requests/${reqId}/records`)).json()
 }
@@ -64,6 +70,7 @@ const resubmitRequest = async () => {
       body: JSON.stringify({ request: reqtxt, status: 'processing', action: 'resubmitted', action_by: userStore.user.name })
     }
   )
+  await userStore.refreshUser()
   req.value = await (await fetch(`http://localhost:8001/requests/${reqId}`)).json()
   rcrds.value = await (await fetch(`http://localhost:8001/requests/${reqId}/records`)).json()
 }
@@ -80,6 +87,7 @@ const closeEditModal = () => {
 
 onMounted(async () => {
   userStore.loadUser()
+  llmStore.loadLlm()
   let res = await fetch(`http://localhost:8001/requests/${reqId}`)
   req.value = await res.json()
   res = await fetch(`http://localhost:8001/requests/${reqId}/records`)
@@ -95,10 +103,17 @@ onMounted(async () => {
     <div class="max-w-7xl mx-auto w-full px-6 py-3">
       <div class="flex items-center justify-between w-full">
       
-	<!-- Logo -->
-	<a href="/" class="flex items-center gap-2.5">
-          <span class="text-2xl font-semibold tracking-tighter text-base-content">agnt3</span>
-	</a>
+	<!-- Logo + LLM -->
+	<div class="flex items-center gap-6">
+          <a href="/requests" class="flex items-center gap-2.5">
+            <span class="text-2xl font-semibold tracking-tighter text-base-content">agnt3</span>
+          </a>
+          
+          <!-- LLM Display -->
+          <div class="flex items-center gap-2 px-3 py-1.5 text-sm text-base-content/60">
+            {{ llmStore.llm || 'Not selected' }}
+          </div>
+	</div>
 
 	<!-- Right side -->
 	<div class="flex items-center gap-6">

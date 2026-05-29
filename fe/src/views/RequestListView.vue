@@ -1,12 +1,13 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { useUserStore } from '../stores/user'
+import { useUserStore, useLlmStore } from '../stores/user'
 
 const requests = ref([])
 const approvalRequests = ref([])
 const overrideRequests = ref([])
 const userStore = useUserStore()
+const llmStore = useLlmStore()
 const modalRef = ref(null)
 const newreq = ref('')
 const loading = ref(false)
@@ -15,13 +16,21 @@ const activeTab = ref('my-requests')
 const selectedRequest = ref(null)
 const decisionReason = ref('')
 const modalDecisionRef = ref(null)
+const requesterUser = ref(null)
 
 let params = ''
 
-const openModal = () => { modalRef.value?.showModal() }
-const openDecisionModal = (req) => {
+const openModal = () => {
+  modalRef.value?.showModal()
+}
+const openDecisionModal = async (req) => {
   decisionReason.value = ''
   selectedRequest.value = req
+
+  requesterUser.value = null
+  const res = await fetch(`http://localhost:8001/users/${req.requester_id}`)
+  requesterUser.value = await res.json()
+
   modalDecisionRef.value?.showModal()
 }
 const closeDecisionModal = () => { modalDecisionRef.value?.close() }
@@ -116,7 +125,8 @@ async function fetchTab(tabName) {
       
 
 onMounted(async () => {
-	params = new URLSearchParams()
+  llmStore.loadLlm()
+  params = new URLSearchParams()
   params.append('user_id', userStore.user.id)
   const res = await fetch(`http://localhost:8001/requests?${params.toString()}`)
   requests.value = await res.json()
@@ -129,20 +139,29 @@ onMounted(async () => {
 </script>
 
 <template>
+
+  <!-- Navbar -->
   <nav class="navbar bg-[#f8f9fc] dark:bg-base-100 border-b border-primary/10 sticky top-0 z-50">
     <div class="max-w-7xl mx-auto w-full px-6 py-2">
       <div class="flex items-center justify-between w-full">
-      
-	<!-- Logo -->
-	<a href="/" class="flex items-center gap-2.5">
-          <span class="text-2xl font-semibold tracking-tighter text-base-content">agnt3</span>
-	</a>
+	
+	<!-- Logo + LLM -->
+	<div class="flex items-center gap-6">
+          <a href="/requests" class="flex items-center gap-2.5">
+            <span class="text-2xl font-semibold tracking-tighter text-base-content">agnt3</span>
+          </a>
+          
+          <!-- LLM Display -->
+          <div class="flex items-center gap-2 px-3 py-1.5 text-sm text-base-content/60">
+            {{ llmStore.llm || 'Not selected' }}
+          </div>
+	</div>
 
 	<!-- Right side -->
 	<div class="flex items-center gap-6">
-        
+          
           <!-- New Request -->
-          <button 
+          <button
             @click="openModal"
             class="btn btn-primary btn-sm rounded-2xl px-5 py-2.5 text-sm font-medium shadow-sm hover:shadow transition-all active:scale-95">
             + New Request
@@ -154,12 +173,10 @@ onMounted(async () => {
               <div>
 		<p class="font-medium text-sm">{{ userStore.user.fullname }}</p>
               </div>
-            
               <div class="w-8 h-8 bg-primary/10 text-primary rounded-2xl flex items-center justify-center font-medium border border-primary/20">
 		{{ userStore.user.fullname?.charAt(0) }}
               </div>
             </label>
-
             <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-3xl shadow-lg w-52 p-2 mt-2 border border-base-200">
               <li><a @click="openModal" class="rounded-2xl py-2.5">+ New Request</a></li>
               <li><RouterLink to="/login" class="rounded-2xl py-2.5 text-error">Logout</RouterLink></li>
@@ -169,6 +186,7 @@ onMounted(async () => {
       </div>
     </div>
   </nav>
+
   <dialog ref="modalRef" class="modal">
     <div class="modal-box">
       <p class="py-4">Enter a new request:</p>
@@ -361,6 +379,12 @@ onMounted(async () => {
               </p>
 	    </div>
 
+	    <!-- Requester -->
+	    <div class="flex-1 min-w-0">
+	      <p class="text-sm text-base-content/60 mt-1">Requester</p>
+	      <p class="font-medium text-base">{{ req.requester }}</p>
+	    </div>
+
 	    <!-- Status -->
 	    <div>
               <span 
@@ -413,6 +437,12 @@ onMounted(async () => {
               </p>
 	    </div>
 
+	    <!-- Requester -->
+	    <div class="flex-1 min-w-0">
+	      <p class="text-sm text-base-content/60 mt-1">Requester</p>
+	      <p class="font-medium text-base">{{ req.requester }}</p>
+	    </div>
+	    
 	    <!-- Status -->
 	    <div>
               <span 
@@ -479,6 +509,33 @@ onMounted(async () => {
         <p class="text-sm leading-relaxed">{{ selectedRequest?.reason }}</p>
       </div>
 
+      <!-- Requested + Available Days -->
+      <div class="grid grid-cols-2 gap-6">
+	<!-- Requested Days -->
+	<div>
+	  <div class="text-base-content/60 text-xs uppercase tracking-widest mb-1">
+	    Requested days
+	  </div>
+	  <div class="font-medium text-lg">
+	    {{ selectedRequest?.requested_days }}
+	  </div>
+	</div>
+
+	<!-- Available Days -->
+	<div>
+	  <div class="text-base-content/60 text-xs uppercase tracking-widest mb-1">
+	    Available days
+	  </div>
+	  <div v-if="requesterUser" class="font-medium text-lg">
+	    {{ requesterUser?.pto_assigned - requesterUser?.pto_consumed - requesterUser?.pto_planned + selectedRequest?.requested_days }}
+	    <span class="text-sm text-base-content/60">
+              (+{{ requesterUser?.pto_planned - selectedRequest?.requested_days }})
+	    </span>
+	  </div>
+	  <div v-else clase="skeleton h-7 w-24 rounded-xl"></div>
+	</div>
+      </div>
+
       <!-- Previous Decision -->
       <div v-if="selectedRequest?.decision" class="bg-base-100 rounded-xl p-4">
         <p class="text-base-content/60 text-xs uppercase tracking-widest mb-3">Previous Decision</p>
@@ -504,7 +561,7 @@ onMounted(async () => {
 
       <!-- Decision Reason Input -->
       <div class="form-control">
-        <label class="label">
+        <label class="label mb-2">
           <span class="label-text font-medium">Decision Reason</span>
         </label>
         <textarea 
@@ -527,12 +584,14 @@ onMounted(async () => {
       <button 
         type="button" 
         class="btn btn-success text-white"
+	:disabled="!decisionReason?.trim()"
         @click="handleDecision('approved')">
         Approve
       </button>
       <button 
         type="button" 
         class="btn btn-error text-white"
+	:disabled="!decisionReason?.trim()"
         @click="handleDecision('denied')">
         Deny
       </button>

@@ -48,6 +48,24 @@ Output your final judgment using the requested JSON schema. Be concise. Put requ
 #     model_name, provider=OllamaProvider(base_url="http://localhost:11434/v1")
 # )
 # model_name = "google-gla:gemini-2.5-flash-lite"
+
+llm_models = [
+    {
+        "model": "google-gla:gemini-3.1-flash-lite",
+        "model_name": "google-gla:gemini-3.1-flash-lite",
+    },
+    {
+        "model": "google-gla:gemini-2.5-flash-lite",
+        "model_name": "google-gla:gemini-2.5-flash-lite",
+    },
+    {
+        "model": OllamaModel(
+            "qwen3:8b", provider=OllamaProvider(base_url="http://localhost:11434/v1")
+        ),
+        "model_name": "qwen3:8b",
+    },
+]
+
 model_name = "google-gla:gemini-3.1-flash-lite"
 model = model_name
 print(model_name)
@@ -58,6 +76,23 @@ agent = Agent(
     output_type=PolicyDecision,
     model_settings={"temperature": 0},
 )
+
+
+def set_llm_model(mname: str) -> bool:
+    global model_name, model, agent
+    for m in llm_models:
+        if mname == m["model_name"]:
+            model_name = mname
+            model = m["model"]
+            agent = Agent(
+                model,
+                toolsets=[server],
+                system_prompt=system_prompt,
+                output_type=PolicyDecision,
+                model_settings={"temperature": 0},
+            )
+            return True
+    return False
 
 
 @retry(

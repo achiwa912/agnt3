@@ -26,6 +26,7 @@ class Decision:
     UNDECIDED = "undecided"
     APPROVED = "approved"
     DENIED = "denied"
+    CANCELLED = "cancelled"
 
 
 class Action:

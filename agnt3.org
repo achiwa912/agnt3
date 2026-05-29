@@ -917,3 +917,233 @@ No asterisk-based bullet/header formatting (org-mode compatibility)
 - prev_sts in [appr, pend] -> -prev
 - new_sts in [appr, pend] -> +new
 
+
+- Will ask gemini/deepseek help
+#+begin_src 
+Project: agnt3 (Sandbox Compliance Officer)
+AI agent system for HR/Compliance automation with Human-in-the-Loop (HITL) gating.
+
+Tech Stack
+Agent: PydanticAI + Gemini (google-gla:gemini-2.5-flash / gemini-3.1-flash-lite switchable)
+Tools: MCP Python SDK, streamable-http transport, port 8000
+DB: SQLite + SQLAlchemy async (aiosqlite), file at db/db.db
+Frontend: Vue 3 + Vite + DaisyUI/Tailwind (emerald theme), port 5173
+API: FastAPI, port 8001
+
+Startup sequence
+uv run python mcp/server.py
+rm db/db.db
+uv run python -m db.database
+uv run python -m db.seed
+uvicorn api.main:app --reload --port 8001
+cd fe && pnpm dev
+
+Directory layout
+mcp/server.py — FastMCP server, read_policy tool, policy/ dir
+agent/agent.py — PydanticAI agent, run_agent(), process_request()
+db/models.py — SQLAlchemy ORM: User, Request, Record + constants (Role, Status, Action, Decision)
+db/database.py — async engine, async_sessionmaker, init_db()
+db/seed.py — seeds llm (id=1), jsmith (id=2, employee), flake (id=3, manager), tpond (id=4, employee), jbond (id=5, manager), tgold (id=6, vp)
+db/crud.py — create_request, create_record, update_request, update_user, get_user, get_user_by_id, get_users, get_requests, get_request, get_records
+policy/pto_policy.md — POL-001 through POL-010
+api/main.py — FastAPI endpoints: GET /users, GET /users/{user_id}, GET /users/{user_id}/requests, POST /requests, PATCH /requests/{request_id}, GET /requests/{request_id}, GET /requests/{request_id}/records
+fe/src/main.js — app entry
+fe/src/style.css — Tailwind + daisyUI config
+fe/src/App.vue — root, just <RouterView />
+fe/src/router/index.js — routes + navigation guard with sessionStorage rehydration
+fe/src/stores/user.js — Pinia store: user, setUser(), loadUser()
+fe/src/views/LoginView.vue — user dropdown, sets store, redirects to /requests
+fe/src/views/RequestListView.vue — navbar, stats (PTO, denied, waiting), request table with tooltip + row click nav, new request modal with POST /requests + list reload; 3-tab layout: My Requests / Approval / Override with manager/VP conditional rendering
+fe/src/views/RequestDetailView.vue — request detail, cancel/appeal/edit+resubmit actions, record history, router.go(0) reload after actions
+
+Key design decisions
+LLM approves, denies, or defers — humans cancel/appeal/override from dashboard
+Constants as plain classes (not Enum) — stored as lowercase strings
+policy_ids stored as JSON column on Request
+All crud functions assume an already-begun session
+sessionStorage persists login; loadUser() called in onMounted
+action_by sent as username string from frontend, looked up via get_user(s, username) in endpoint
+update_request always called in patch_request for all actions; resubmitted also triggers run_agent + process_request after
+update_request handles create_record internally (no longer branching by action — unified call)
+s.add(req) removed from update_request (no-op; identity map tracks mutations)
+get_users() has exclude_llm=True default; pass False in get_requests_ep to include LLM in decider name map
+patch_request must NOT mutate r directly before calling update_request — SQLAlchemy identity map means r and req in update_request are the same object, corrupting prev_status/prev_decision (major bug fixed in Problem 11)
+
+Agent / LLM
+PolicyDecision schema: policy_ids: list[str], llm_decision: Literal["approved", "denied", "deferred_to_manager", "deferred_to_vp"], requested_days: float, reason: str
+PTO context injected into req_text: pto_yellow (2/3 of assigned minus consumed/planned) and pto_red (assigned minus consumed/planned)
+Decision criteria: approved if requested_days <= pto_yellow; deferred_to_manager if pto_yellow < requested_days <= pto_red; denied if requested_days > pto_red or clear policy violation with no exception path
+gemini-2.5-flash-lite too weak; switched to google-gla:gemini-3.1-flash-lite
+
+Problem 11 — pto_planned tracking (largely complete, frontend refresh remaining)
+
+Backend complete:
+- requested_days: Optional[float] added to Request model and Record model (audit)
+- update_user(s, user_id, requested_days_delta) added to crud.py; guarded with if requested_days_delta
+- create_request no longer takes requested_days or calls update_user (LLM determines days)
+- update_request captures prev_requested_days, prev_status, prev_decision before any mutations
+- pto_planned delta logic in update_request:
+    delta = 0.0
+    if prev_status in [PENDING_MANAGER, PENDING_VP] or prev_decision == Decision.APPROVED:
+        delta -= prev_requested_days
+    if status in [PENDING_MANAGER, PENDING_VP] or decision == Decision.APPROVED:
+        delta += requested_days
+    if delta: await update_user(s, req.requester_id, delta)
+- PatchRequestBody now includes requested_days: Optional[float] = None and policy_ids, requester_id
+- patch_request passes body.* directly to update_request (not r.* mutations)
+- process_request passes result.output.requested_days for all decision branches
+
+pto_planned event rules (for reference):
+- LLM approved/deferred, prev=created -> +new
+- LLM denied, prev=created -> no change
+- resubmit (human action only) prev=pending/approved -> -prev; prev=denied -> no change
+- Manager approved, prev=pending -> no change
+- Manager denied (incl. override), prev=pending/approved -> -prev
+- Manager override approved, prev=denied -> +new; prev=pending/approved -> -prev+new
+- cancelled, prev=pending/approved -> -prev; prev=denied/created -> no change
+
+Frontend remaining (Problem 11):
+- refreshUser() helper: call GET /users/{user_id} and update userStore after any action that changes pto_planned
+  (cancel, new request, approve, deny, resubmit — basically after every PATCH and POST)
+- show/edit requested_days in approval/override modal
+
+Open issue:
+- Resubmit from cancelled flow showed unexpected pto_planned value (+-1) mid-investigation;
+  needs fresh DB test after refreshUser() is implemented to confirm correctness
+
+Problem 12 or later
+- add LLM list to choose from on login page
+- modernize login page
+- auditor mode (can view everything)
+- write README.org
+
+Learning Approach (Important!)
+Problem-by-problem (same pedagogy as ragev frontend project)
+Do NOT give code first — guide toward the solution
+Concise answers with links to official docs where relevant
+Prefer complete files over diffs when code is eventually provided
+No asterisk-based bullet/header formatting (org-mode compatibility)
+#+end_src
+
+- summary
+#+begin_src 
+# Project: agnt3 (Sandbox Compliance Officer)
+
+AI agent system for HR/Compliance automation with Human-in-the-Loop (HITL) gating.
+
+## Tech Stack
+
+- Agent: PydanticAI + Gemini (google-gla:gemini-2.5-flash / gemini-3.1-flash-lite switchable)
+- Tools: MCP Python SDK, streamable-http transport, port 8000
+- DB: SQLite + SQLAlchemy async (aiosqlite), file at db/db.db
+- Frontend: Vue 3 + Vite + DaisyUI/Tailwind (emerald theme), port 5173
+- API: FastAPI, port 8001
+
+## Startup sequence
+
+```
+uv run python mcp/server.py
+rm db/db.db
+uv run python -m db.database
+uv run python -m db.seed
+uvicorn api.main:app --reload --port 8001
+cd fe && pnpm dev
+```
+
+## Directory layout
+
+- mcp/server.py — FastMCP server, read_policy tool, policy/ dir
+- agent/agent.py — PydanticAI agent, run_agent(), process_request(), set_llm_model(), llm_models list
+- db/models.py — SQLAlchemy ORM: User, Request, Record + constants (Role, Status, Action, Decision)
+- db/database.py — async engine, async_sessionmaker, init_db()
+- db/seed.py — seeds llm (id=1), jsmith (id=2, employee), flake (id=3, manager), tpond (id=4, employee), jbond (id=5, manager), tgold (id=6, vp)
+- db/crud.py — create_request, create_record, update_request, update_user, get_user, get_user_by_id, get_users, get_requests, get_request, get_records
+- policy/pto_policy.md — POL-001 through POL-010
+- api/main.py — FastAPI endpoints: GET /users, GET /users/{user_id}, GET /users/{user_id}/requests, POST /requests, PATCH /requests/{request_id}, GET /requests/{request_id}, GET /requests/{request_id}/records, GET /models, POST /models/{model_name}
+- fe/src/main.js — app entry
+- fe/src/style.css — Tailwind + daisyUI config
+- fe/src/App.vue — root, just <RouterView />
+- fe/src/router/index.js — routes + navigation guard with sessionStorage rehydration
+- fe/src/stores/user.js — Pinia store: user, setUser(), loadUser(), refreshUser(); llm store: llm, setLlm(), loadLlm()
+- fe/src/views/LoginView.vue — user dropdown + LLM dropdown + submit button; POST /models/{model_name} then setUser + setLlm + push to /requests
+- fe/src/views/RequestListView.vue — navbar, stats (PTO, denied, waiting), request table with tooltip + row click nav, new request modal with POST /requests + list reload; 3-tab layout: My Requests / Approval / Override with manager/VP conditional rendering; approval/override modal shows requester name, requested_days, available PTO with skeleton loading
+- fe/src/views/RequestDetailView.vue — request detail, cancel/appeal/edit+resubmit actions, record history; refreshUser() called after cancel and resubmit
+
+## Key design decisions
+
+- LLM approves, denies, or defers — humans cancel/appeal/override from dashboard
+- Constants as plain classes (not Enum) — stored as lowercase strings
+- policy_ids stored as JSON column on Request
+- All crud functions assume an already-begun session
+- sessionStorage persists login and LLM selection; loadUser()/loadLlm() called in onMounted
+- action_by sent as username string from frontend, looked up via get_user(s, username) in endpoint
+- update_request always called in patch_request for all actions; resubmitted also triggers run_agent + process_request after
+- update_request handles create_record internally (no longer branching by action — unified call)
+- s.add(req) removed from update_request (no-op; identity map tracks mutations)
+- get_users() has exclude_llm=True default; pass False in get_requests_ep to include LLM in decider name map
+- patch_request must NOT mutate r directly before calling update_request — SQLAlchemy identity map means r and req in update_request are the same object, corrupting prev_status/prev_decision (major bug fixed in Problem 11)
+- delta += line in update_request falls back to req.requested_days when requested_days param is None (manager approve PATCH sends no days)
+- global model_name, model, agent declared in set_llm_model() to correctly update module-level globals
+
+## Agent / LLM
+
+- PolicyDecision schema: policy_ids: list[str], llm_decision: Literal["approved", "denied", "deferred_to_manager", "deferred_to_vp"], requested_days: float, reason: str
+- PTO context injected into req_text: pto_yellow (2/3 of assigned minus consumed/planned) and pto_red (assigned minus consumed/planned)
+- Decision criteria: approved if requested_days <= pto_yellow; deferred_to_manager if pto_yellow < requested_days <= pto_red; denied if requested_days > pto_red or clear policy violation with no exception path
+- gemini-2.5-flash-lite too weak; switched to google-gla:gemini-3.1-flash-lite
+- llm_models list in agent.py holds available models; set_llm_model() swaps globals at runtime
+- POST /models/{model_name} endpoint calls set_llm_model(); GET /models returns model name list
+
+## Problem 11 — pto_planned tracking (complete)
+
+Backend:
+- requested_days: Optional[float] added to Request model and Record model (audit)
+- update_user(s, user_id, requested_days_delta) added to crud.py; guarded with if requested_days_delta
+- create_request no longer takes requested_days or calls update_user (LLM determines days)
+- update_request captures prev_requested_days, prev_status, prev_decision before any mutations
+- pto_planned delta logic in update_request:
+  - delta -= prev_requested_days if prev_status in [PENDING_MANAGER, PENDING_VP] or prev_decision == APPROVED
+  - delta += requested_days (falling back to req.requested_days if None) if status in [PENDING_MANAGER, PENDING_VP] or decision == APPROVED
+  - if delta != 0: await update_user(s, req.requester_id, delta)
+- action in ["cancelled", "resubmitted"] clears decision, decider_id, decided_at before other mutations
+- PatchRequestBody includes requested_days: Optional[float] = None, policy_ids, requester_id
+- patch_request passes body.* directly to update_request (not r.* mutations)
+- process_request passes result.output.requested_days for all decision branches
+
+Frontend:
+- refreshUser() added to Pinia user store — fetches GET /users/{user.id} and calls setUser()
+- refreshUser() called after cancelRequest and resubmitRequest in RequestDetailView
+- approval/override modal fetches requester PTO via GET /users/{requester_id} on open (openDecisionModal is async)
+- requesterUser ref shows available days: pto_assigned - pto_consumed - pto_planned + requested_days, with skeleton placeholder while loading
+
+pto_planned event rules:
+- LLM approved/deferred, prev=created -> +new
+- LLM denied, prev=created -> no change
+- resubmit (human action only) prev=pending/approved -> -prev; prev=denied -> no change
+- Manager approved, prev=pending -> no change
+- Manager denied (incl. override), prev=pending/approved -> -prev
+- Manager override approved, prev=denied -> +new; prev=pending/approved -> -prev+new
+- cancelled, prev=pending/approved -> -prev; prev=denied/created -> no change
+
+## Problem 12 — LLM selector on login (complete)
+
+- llm_models list added to agent.py with google-gla:gemini-3.1-flash-lite, google-gla:gemini-2.5-flash-lite, qwen3:8b
+- set_llm_model(mname) added to agent.py — uses global declaration to update model_name, model, agent
+- GET /models endpoint returns list of model name strings
+- POST /models/{model_name} endpoint calls set_llm_model()
+- useLlmStore added to fe/src/stores/user.js — llm ref, setLlm(), loadLlm(), persisted to sessionStorage
+- LoginView updated: fetches /models, shows user dropdown + LLM dropdown + submit button; on submit POSTs selected model then setUser + setLlm + router.push('/requests')
+
+## Problem 13 or later
+
+- auditor mode (can view everything)
+- write README.org
+
+## Learning Approach (Important!)
+
+- Problem-by-problem (same pedagogy as ragev frontend project)
+- Do NOT give code first — guide toward the solution
+- Concise answers with links to official docs where relevant
+- Prefer complete files over diffs when code is eventually provided
+- No asterisk-based bullet/header formatting (org-mode compatibility)
+#+end_src

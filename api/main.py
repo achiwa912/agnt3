@@ -16,7 +16,7 @@ from db.crud import (
     update_request,
 )
 from db.database import session
-from agent.agent import run_agent, process_request, server
+from agent.agent import run_agent, process_request, server, llm_models, set_llm_model
 
 app = FastAPI()
 app.add_middleware(
@@ -70,6 +70,7 @@ async def get_requests_ep(
                     reason=r.reason,
                     status=r.status,
                     decision=r.decision,
+                    requested_days=r.requested_days,
                     policy_ids=r.policy_ids,
                     created_at=r.created_at,
                     decided_at=r.decided_at,
@@ -115,6 +116,8 @@ class PatchRequestBody(BaseModel):
     decision: Optional[str] = None
     decider_id: Optional[int] = None
     requested_days: Optional[float] = None
+    policy_ids: Optional[List[str]] = None
+    requester_id: Optional[int] = None
 
 
 @app.patch("/requests/{request_id}", response_model=RequestSchema)
@@ -122,34 +125,34 @@ async def patch_request(request_id: int, body: PatchRequestBody):
     async with session() as s:
         async with s.begin():
             r = await get_request(s, request_id)
-            if body.request:
-                r.request = body.request
-            if body.reason:
-                r.reason = body.reason
-            if body.status:
-                r.status = body.status
-            if body.decision:
-                r.decision = body.decision
-                r.decider_id = body.decider_id
-            if body.requested_days:
-                r.requested_days = body.requested_days
+            # if body.request:
+            #     r.request = body.request
+            # if body.reason:
+            #     r.reason = body.reason
+            # if body.status:
+            #     r.status = body.status
+            # if body.decision:
+            #     r.decision = body.decision
+            #     r.decider_id = body.decider_id
+            # if body.requested_days:
+            #     r.requested_days = body.requested_days
             action_by_user = await get_user(s, body.action_by)
             await update_request(
                 s,
                 request_id,
                 action=body.action,
                 action_by=action_by_user.id,
-                request=r.request,
-                reason=r.reason,
-                status=r.status,
-                decision=r.decision,
-                requested_days=r.requested_days,
-                policy_ids=r.policy_ids,
-                requester_id=r.requester_id,
-                decider_id=r.decider_id,
+                request=body.request,
+                reason=body.reason,
+                status=body.status,
+                decision=body.decision,
+                requested_days=body.requested_days,
+                policy_ids=body.policy_ids,
+                requester_id=body.requester_id,
+                decider_id=body.decider_id,
             )
             if body.action == "resubmitted":
-                r.request = body.request
+                r.request = body.request  # not needed?
 
                 u = await get_user_by_id(s=s, user_id=r.requester_id)
                 pto_yellow = u.pto_assigned * 2 / 3 - u.pto_consumed - u.pto_planned
@@ -179,6 +182,7 @@ async def read_request(request_id: int) -> RequestSchema:
         reason=r.reason,
         status=r.status,
         decision=r.decision,
+        requested_days=r.requested_days,
         policy_ids=r.policy_ids,
         created_at=r.created_at,
         decided_at=r.decided_at,
@@ -272,3 +276,17 @@ async def list_records(request_id: int) -> List[RecordSchema]:
                 )
                 rcds.append(rcd)
     return rcds
+
+
+@app.get("/models")
+def list_models() -> List[str]:
+    return [m["model_name"] for m in llm_models]
+
+
+@app.post("/models/{model_name}")
+def set_model(model_name: str) -> bool:
+    for m in llm_models:
+        if model_name == m["model_name"]:
+            set_llm_model(model_name)
+            return True
+    return False
