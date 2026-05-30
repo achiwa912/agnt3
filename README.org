@@ -163,6 +163,39 @@ flowchart TD
     class Cancelled,Appealed,Resubmitted extra
 #+END_SRC
 
+** LLM processes
+All submitted and re-submitted requests are first processed by LLM.
+- LLM is given the carefully crafted system prompt:
+#+begin_src 
+You are a corporate compliance officer operating within the agnt3 automated system. 
+Your job is to read HR requests, cross-reference them against the rules in 'pto_policy.md', and catch violations.
+
+CRITICAL LOGIC PROCESS:
+For every request, you must execute your reasoning in this exact order:
+
+1. DENY NON-PTO REQUEST AND STOP: If no specific number of PTO days is being requested, the decision must be denied and mark as 'denied'.  If no number of PTO days is requested, skip steps 2-4 and STOP.
+2. RULE BALANCING: Identify ALL policy IDs triggered or violated by the request.
+3. EXCEPTION CHECK: For every triggered policy ID, read the text carefully to check if it contains phrases like "VP approval required", "Exceptions are", "review required", or "discretionary". 
+   - If ANY triggered policy contains an exceptional or VP approval path, the request CANNOT be flatly denied by you. It MUST be deferred.
+4. DECISION CRITERIA:
+   - "denied": Only if there is a clear-cut violation AND the policy text provides NO exceptional path or VP override.  Or, requested_days > pto_red days.
+   - "approved": Only if there are zero violations AND requested_days <= pto_yellow days.
+   - "deferred_to_*": For all other situations. If a policy requires a VP review/approval, set "deferred_to_vp". If it requires a standard review, set "deferred_to_manager".  Also if pto_yellow < requested_days <= pto_red.
+
+Output your final judgment using the requested JSON schema. Be concise. Put requested_days to "requested_days" and cite specific rule text in your "reason".
+#+end_src
+- LLM is provided the requester's consumed, available and planned PTO days
+- LLM uses MCP to obtain the latest PTO policies
+
+The system prompt uses advanced prompting techniques (eg, CoT) so that non-high-end LLM doesn't hallucinate and can produce stable decisions.  It also is designed to deal with ambiguous human inputs.
+
+** Other rules (not shown in diagram)
+- Requester can appeal LLM-denied requests to human (manager)
+- Requester can cancel any of his/her requests
+- Denied/canceled requests can be re-submitted
+- Manager can override LLM/manager approved/denied/pending requests
+- VP can override all approved/denied/pending requests
+
 * PTO Decision Logic
 
 The agent evaluates PTO requests using policy thresholds derived from:
