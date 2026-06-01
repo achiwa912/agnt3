@@ -2,6 +2,8 @@
 
 AI agent system for HR and compliance automation with Human-in-the-Loop (HITL) gating.
 
+[[./images/1st.jpg]]
+
 agnt3 is an experimental compliance workflow platform that combines:
 
 - LLM-based policy reasoning
@@ -284,24 +286,96 @@ The fix:
 
 This became the core consistency mechanism of the system.
 
-* Startup
+
+* Quick Start
+** Setup (only once)
+- Python 3.14.0 (probably work with 3.11.0 or later)
+- Create project
+#+begin_src bash
+brew install uv  # for mac
+git clone https://github.com/achiwa912/agnt3.git
+cd agnt3
+uv sync
+source .venv/bin/activate
+#+end_src
+
+- Install local LLM model
+#+begin_src bash
+ollama run qwen3:8b
+#+end_src
+
+- Vue+TailwindCSS+DaisyUI scaffolding
+#+begin_src bash
+pnpm create vue@latest fe
+cd fe
+pnpm install
+pnpm add -D daisyui@latest
+pnpm add -D @tailwindcss/vite tailwindcss
+pnpm add -g @vue/language-server  # for Emacs
+#+end_src
+
+- options to choose
+#+begin_src 
+TypeScript: No
+JSX: No
+Vue Router: Yes  # <--- must
+Pinia: Yes  # <--- must
+Vitest: No
+Playwright: No
+ESLint: Yes
+Prettier: Yes
+#+end_src
+
+** Startup
 
 #+BEGIN_SRC bash
-# run mcp server
+# run mcp server (terminal 1)
 uv run python mcp/server.py
 
-# run backend
+# run backend (terminal 2)
 rm db/db.db  # delete database
 
 uv run python -m db.database  # initialize database tables
 uv run python -m db.seed  # setup sample users
 uvicorn api.main:app --reload --port 8001
 
-# run frontend
+# run frontend (terminal 3)
 cd fe
 pnpm dev
 #+END_SRC
-- visit http://localhost:8000 from your browser
+
+** Navigate
+- visit login page at http://localhost:8000 from your browser
+[[./images/login.jpg]]
+
+- Choose a user and optionally an LLM model to login
+  - authentication not supported
+- You'll see requests (if already exist)
+[[./images/reqlist.jpg]]
+
+- Click =+ New request button=
+- You can create a PTO request (eg, "I want to have 3 PTO days")
+[[./images/newreq.jpg]]
+
+- The request is processed by LLM
+  - Either approved, denied or pending_manager/vp
+
+- If you click a request in the list, you'll see a detailed page
+[[./images/reqdetail.jpg]]
+
+- You can cancel request or edit request text and re-submit
+  - Re-submitted request goes through LLM process (again)
+
+- If logged in as a manager or vp, you'll see approval/override tabs
+- Approval tab shows you requests that need your approval
+[[./images/approval.jpg]]
+
+- You can click a request and review the request
+[[./images/review.jpg]]
+
+- Override tab shows you requests that you can override decisions
+[[./images/override.jpg]]
+
 
 * Ports
 
