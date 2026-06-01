@@ -117,17 +117,17 @@ This approach allows rapid policy iteration while preserving operational control
 
 * Technology Stack
 
-| Layer | Technology |
-|-------+------------|
-| Agent | PydanticAI |
-| Models | Gemini 3.1 Flash Lite / Gemini 2.5 Flash Lite / Qwen3:8b |
-| Tooling | MCP Python SDK |
-| Backend | FastAPI |
-| ORM | SQLAlchemy Async |
-| Database | SQLite + aiosqlite |
-| Frontend | Vue 3 + Vite |
-| UI | Tailwind + DaisyUI |
-| State | Pinia |
+| Layer    | Technology                                               |
+|----------+----------------------------------------------------------|
+| Agent    | PydanticAI                                               |
+| Models   | Gemini 3.1 Flash Lite / Gemini 2.5 Flash Lite / Qwen3:8b |
+| Tooling  | MCP Python SDK                                           |
+| Backend  | FastAPI                                                  |
+| ORM      | SQLAlchemy Async                                         |
+| Database | SQLite + aiosqlite                                       |
+| Frontend | Vue 3 + Vite                                             |
+| UI       | Tailwind + DaisyUI                                       |
+| State    | Pinia                                                    |
 
 
 * Request Lifecycle
@@ -215,11 +215,11 @@ Two thresholds are injected into the prompt context:
 
 Decision behavior:
 
-| Condition | Result |
-|-----------+--------|
-| requested_days <= pto_yellow | approved |
+| Condition                              | Result              |
+|----------------------------------------+---------------------|
+| requested_days <= pto_yellow           | approved            |
 | pto_yellow < requested_days <= pto_red | deferred_to_manager |
-| requested_days > pto_red | denied |
+| requested_days > pto_red               | denied              |
 
 Clear policy violations may also result in denial.
 
@@ -233,7 +233,8 @@ Current supported models:
 - google-gla:gemini-2.5-flash-lite
 - qwen3:8b
 
-For gemini models, you'll need to set GEMINI_API_KEY environment variable.
+For gemini models, you'll need to set =GEMINI_API_KEY= environment variable.
+To get one, visit Google AI Studio at [[https://aistudio.google.com]]
 The backend updates the active model at runtime through:
 
 - GET /models
@@ -332,11 +333,12 @@ Prettier: Yes
 # run mcp server (terminal 1)
 uv run python mcp/server.py
 
-# run backend (terminal 2)
-rm db/db.db  # delete database
-
+# delete and initialize database (when necessary)
+rm db/db.db
 uv run python -m db.database  # initialize database tables
 uv run python -m db.seed  # setup sample users
+
+# run backend (terminal 2)
 uvicorn api.main:app --reload --port 8001
 
 # run frontend (terminal 3)
@@ -363,6 +365,9 @@ pnpm dev
 - If you click a request in the list, you'll see a detailed page
 [[./images/reqdetail.jpg]]
 
+- The page shows history of all actions (eg, created, approved, etc.)
+[[./images/reqhist.jpg]]
+
 - You can cancel request or edit request text and re-submit
   - Re-submitted request goes through LLM process (again)
 
@@ -376,6 +381,16 @@ pnpm dev
 - Override tab shows you requests that you can override decisions
 [[./images/override.jpg]]
 
+
+** Config
+- To change (sample) users
+  - edit db/seed.py
+- To change policy
+  - edit policy/pto_policy.md
+- To change system_prompt for LLM
+  - change system_prompt in agent/agent.py
+- To change LLM models
+  - change llm_models in agent/agent.py
 
 * Ports
 
