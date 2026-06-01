@@ -1,6 +1,6 @@
 #+TITLE: agnt3 - Sandbox Compliance Officer
 
-AI agent system for HR and compliance automation with Human-in-the-Loop (HITL) gating.
+AI agent system for HR and compliance automation with Human-in-the-Loop (HITL) gating.  This project explores how LLMs can assist policy-driven business workflows while preserving human authority, auditability, and deterministic state management.
 
 [[./images/1st.jpg]]
 
@@ -191,7 +191,7 @@ Output your final judgment using the requested JSON schema. Be concise. Put requ
 - LLM is provided the requester's consumed, available and planned PTO days
 - LLM uses MCP to obtain the latest PTO policies
 
-The system prompt uses advanced prompting techniques (eg, CoT) so that non-high-end LLM doesn't hallucinate and can produce stable decisions.  It also is designed to deal with ambiguous human inputs.
+The system prompt uses a structured reasoning process and schema-constrained outputs to improve decision consistency across multiple LLMs.
 
 ** Other rules (not shown in diagram)
 - Requester can appeal LLM-denied requests to human (manager)
@@ -236,6 +236,8 @@ Current supported models:
 For gemini models, you'll need to set =GEMINI_API_KEY= environment variable.
 To get one, visit Google AI Studio at [[https://aistudio.google.com]]
 The backend updates the active model at runtime through:
+
+Note that gemini-2.5-flash-lite is too weak to follow the system_prompt.  This is why 3.1-flash-lite is set as the default.
 
 - GET /models
 - POST /models/{model_name}
@@ -346,8 +348,17 @@ cd fe
 pnpm dev
 #+END_SRC
 
+*** Sample users
+| Username | Role     |
+|----------+----------|
+| jsmith   | Employee |
+| tpond    | Employee |
+| flake    | Manager  |
+| jbond    | Manager  |
+| tgold    | VP       |
+
 ** Navigate
-- visit login page at http://localhost:8000 from your browser
+- visit login page at http://localhost:5173 from your browser
 [[./images/login.jpg]]
 
 - Choose a user and optionally an LLM model to login
@@ -410,3 +421,4 @@ pnpm dev
 - Containerized deployment
 - Integration testing
 - Prompt/version tracking
+- Role-based authentication and authorization
