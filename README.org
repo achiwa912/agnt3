@@ -411,6 +411,17 @@ pnpm dev
 | FastAPI | 8001 |
 | Vite Frontend | 5173 |
 
+* Findings
+- Ambiguous human inputs tend to cause LLM hallucinations
+  - It was quite challenging to make LLM behave deterministic for ambiguous human inputs.  I needed to analyze many times why LLM hallucinates for particular requests and to update the system_prompt accordingly.
+  - This is why Human-In-The-Loop is important.
+- Weak model can be too weak
+  - Initially, I wanted to use "cheap" =gemini-2.5-flash-lite= model, but it continued to hallucinate to the point updating system_prompt can't set proper guardrails.  I needed a smarter model (eg, 3.5-flash-lite) for this project.
+- Deterministic state is harder than LLM integration
+  - Integrating an LLM into the workflow was relatively straightforward.
+  - Maintaining correct PTO accounting across approvals, denials, appeals, cancellations, resubmissions, and overrides proved significantly more challenging.
+  - Most implementation complexity ultimately came from state-transition correctness, auditability, and data consistency rather than from the LLM itself.
+
 * Future Work
 
 - Auditor mode
