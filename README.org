@@ -309,7 +309,6 @@ ollama run qwen3:8b
 
 - Vue+TailwindCSS+DaisyUI scaffolding
 #+begin_src bash
-pnpm create vue@latest fe
 cd fe
 pnpm install
 pnpm add -D daisyui@latest
@@ -335,7 +334,7 @@ Prettier: Yes
 # run mcp server (terminal 1)
 uv run python mcp/server.py
 
-# delete and initialize database (when necessary)
+# delete and initialize database (DESTRUCTIVE!; when you want a fresh start)
 rm db/db.db
 uv run python -m db.database  # initialize database tables
 uv run python -m db.seed  # setup sample users
@@ -416,7 +415,7 @@ pnpm dev
   - It was quite challenging to make LLM behave deterministic for ambiguous human inputs.  I needed to analyze many times why LLM hallucinates for particular requests and to update the system_prompt accordingly.
   - This is why Human-In-The-Loop is important.
 - Weak model can be too weak
-  - Initially, I wanted to use "cheap" =gemini-2.5-flash-lite= model, but it continued to hallucinate to the point updating system_prompt can't set proper guardrails.  I needed a smarter model (eg, 3.5-flash-lite) for this project.
+  - Initially, I wanted to use "cheap" =gemini-2.5-flash-lite= model, but it continued to hallucinate to the point updating system_prompt can't set proper guardrails.  I needed a smarter model (eg, 3.1-flash-lite) for this project.
 - Deterministic state is harder than LLM integration
   - Integrating an LLM into the workflow was relatively straightforward.
   - Maintaining correct PTO accounting across approvals, denials, appeals, cancellations, resubmissions, and overrides proved significantly more challenging.
@@ -433,3 +432,6 @@ pnpm dev
 - Integration testing
 - Prompt/version tracking
 - Role-based authentication and authorization
+
+* License
+Apache 2.0 (see https://www.apache.org/licenses/LICENSE-2.0.txt)
